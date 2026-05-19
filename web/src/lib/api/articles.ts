@@ -24,6 +24,7 @@ export interface ArticleDetail extends ArticleListItem {
   aiBrandTakeaways: string[] | null;
   aiAgencyTakeaways: string[] | null;
   aiHumanRatio: number | null;
+  updatedAt: string | null;
 }
 
 export interface ListResult<T> {
