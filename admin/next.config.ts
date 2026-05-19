@@ -19,6 +19,17 @@ const config: NextConfig = {
 
   experimental: {
     optimizePackageImports: ["lucide-react", "date-fns"],
+    // Reverse proxy arkasında non-default port (8443) için Server Actions CSRF
+    serverActions: {
+      allowedOrigins: [
+        "213.159.6.225:8443",
+        "213.159.6.225",
+        "admin.markaradar.com",
+        "markaradar.com",
+        "localhost:3014",
+        "localhost:8443",
+      ],
+    },
   },
 
   async headers() {

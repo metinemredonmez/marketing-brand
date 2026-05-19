@@ -159,17 +159,25 @@ yarn prisma generate
 yarn prisma db push --skip-generate
 ok "API deps + prisma"
 
+# Standalone build artifacts'i kopyalayan helper
+copy_standalone_artifacts() {
+  cp -r .next/static .next/standalone/.next/ 2>/dev/null || true
+  cp -r public .next/standalone/ 2>/dev/null || true
+  # middleware varsa standalone'a server manifest'leri de kopyala
+  if [ -d .next/server ]; then
+    mkdir -p .next/standalone/.next/server
+    cp -rn .next/server/* .next/standalone/.next/server/ 2>/dev/null || true
+  fi
+}
+
 cd "$APP_DIR/web" && yarn install --frozen-lockfile --production=false
 NEXT_OUTPUT_STANDALONE=true yarn build
-# Standalone build için static dosyaları kopyala
-cp -r .next/static .next/standalone/.next/
-cp -r public .next/standalone/
+copy_standalone_artifacts
 ok "Web build"
 
 cd "$APP_DIR/admin" && yarn install --frozen-lockfile --production=false
 NEXT_OUTPUT_STANDALONE=true yarn build
-cp -r .next/static .next/standalone/.next/
-cp -r public .next/standalone/ 2>/dev/null || true
+copy_standalone_artifacts
 ok "Admin build"
 
 cd "$APP_DIR/api" && yarn build

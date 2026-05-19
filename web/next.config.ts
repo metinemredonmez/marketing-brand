@@ -21,6 +21,16 @@ const config: NextConfig = {
   experimental: {
     // ppr: "incremental",   // Partial Prerendering (Next.js canary'de)
     optimizePackageImports: ["lucide-react", "date-fns"],
+    // Reverse proxy arkasındaki Server Actions için izinli origin'ler
+    serverActions: {
+      allowedOrigins: [
+        "213.159.6.225",
+        "213.159.6.225:443",
+        "markaradar.com",
+        "www.markaradar.com",
+        "localhost:3003",
+      ],
+    },
   },
 
   async rewrites() {

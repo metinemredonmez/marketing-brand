@@ -22,21 +22,33 @@ yarn prisma generate
 yarn prisma db push --skip-generate
 yarn build
 
+# standalone build artifacts'i kopyalayan helper
+copy_standalone_artifacts() {
+  # 1. Static (zorunlu — chunks ve fontlar)
+  cp -r .next/static .next/standalone/.next/ 2>/dev/null || true
+  # 2. Public (favicon, robots, vb.)
+  cp -r public .next/standalone/ 2>/dev/null || true
+  # 3. Server artifacts — middleware-manifest, server-action-manifest, vb.
+  #    Next 15'te bazen otomatik kopyalanmıyor (middleware varsa kritik)
+  if [ -d .next/server ]; then
+    mkdir -p .next/standalone/.next/server
+    cp -rn .next/server/* .next/standalone/.next/server/ 2>/dev/null || true
+  fi
+}
+
 echo ""
 echo "═══ Web"
 cd ../web
 yarn install --frozen-lockfile --production=false
 NEXT_OUTPUT_STANDALONE=true yarn build
-cp -r .next/static .next/standalone/.next/ 2>/dev/null || true
-cp -r public .next/standalone/ 2>/dev/null || true
+copy_standalone_artifacts
 
 echo ""
 echo "═══ Admin"
 cd ../admin
 yarn install --frozen-lockfile --production=false
 NEXT_OUTPUT_STANDALONE=true yarn build
-cp -r .next/static .next/standalone/.next/ 2>/dev/null || true
-cp -r public .next/standalone/ 2>/dev/null || true
+copy_standalone_artifacts
 
 echo ""
 echo "═══ PM2 reload (zero-downtime)"
