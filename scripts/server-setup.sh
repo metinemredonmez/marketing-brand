@@ -195,14 +195,77 @@ fi
 if [ ! -L /etc/nginx/sites-enabled/markaradar ]; then
   cp "$APP_DIR/nginx/markaradar.conf" /etc/nginx/sites-available/markaradar
 
-  # SSL cert henüz yoksa — placeholder kullan
-  if [ ! -d /etc/letsencrypt/live/markaradar.com ]; then
-    sed -i 's|/etc/letsencrypt/live/markaradar\.com/|/etc/ssl/certs/ssl-cert-snakeoil.pem|g; s|ssl_certificate_key /etc/ssl/certs/ssl-cert-snakeoil.pem;|ssl_certificate_key /etc/ssl/private/ssl-cert-snakeoil.key;|g' /etc/nginx/sites-available/markaradar
-    apt-get install -y -qq ssl-cert
-    warn "  TLS henüz yok — snakeoil cert kullanılıyor (geçici)"
+  # Domain custom mı? (markaradar.com değilse)
+  if [ "$DOMAIN" != "markaradar.com" ]; then
+    # Tüm markaradar.com referanslarını custom domain ile değiştir
+    sed -i "s|markaradar\.com|$DOMAIN|g" /etc/nginx/sites-available/markaradar
+    ok "Nginx config domain'i ile özelleştirildi: $DOMAIN"
   fi
 
-  ln -s /etc/nginx/sites-available/markaradar /etc/nginx/sites-enabled/
+  # SSL cert henüz yoksa — HTTP-only fallback config (port 80 only)
+  if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+    # 443 SSL bloklarını yorum satırına al, geçici HTTP-only conf yaz
+    cat > /etc/nginx/sites-available/markaradar <<NGINX_HTTP_ONLY
+# Geçici HTTP-only (certbot sonrası TLS'li versiyona geçilecek)
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $DOMAIN www.$DOMAIN;
+
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+
+    client_max_body_size 25M;
+
+    location /_next/static/ {
+        proxy_pass http://127.0.0.1:3003;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+    location / {
+        proxy_pass http://127.0.0.1:3003;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+server {
+    listen 80;
+    listen [::]:80;
+    server_name api.$DOMAIN;
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    client_max_body_size 25M;
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    }
+}
+server {
+    listen 80;
+    listen [::]:80;
+    server_name admin.$DOMAIN;
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    client_max_body_size 25M;
+    location /_next/static/ {
+        proxy_pass http://127.0.0.1:3004;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+    location / {
+        proxy_pass http://127.0.0.1:3004;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    }
+}
+NGINX_HTTP_ONLY
+    mkdir -p /var/www/certbot
+    warn "  HTTP-only nginx config — TLS sonra certbot ile eklenecek"
+  fi
+
+  ln -sf /etc/nginx/sites-available/markaradar /etc/nginx/sites-enabled/markaradar
   nginx -t && systemctl reload nginx
   ok "Nginx config linklendi + reload"
 else
@@ -221,26 +284,56 @@ fi
 # ───────────────────────── 11. Özet
 bold "ÖZET"
 echo ""
+SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "<sunucu-ip>")
 ok "Kod: $APP_DIR"
 ok "API: http://127.0.0.1:4000 (PM2: markaradar-api)"
 ok "Web: http://127.0.0.1:3003 (PM2: markaradar-web)"
 ok "Admin: http://127.0.0.1:3004 (PM2: markaradar-admin)"
 echo ""
-warn "Sonraki adımlar:"
-echo "  1) DNS:"
-echo "     ${DOMAIN}            A  $(curl -s ifconfig.me 2>/dev/null || echo '<sunucu-ip>')"
-echo "     www.${DOMAIN}        A  $(curl -s ifconfig.me 2>/dev/null || echo '<sunucu-ip>')"
-echo "     api.${DOMAIN}        A  $(curl -s ifconfig.me 2>/dev/null || echo '<sunucu-ip>')"
-echo "     admin.${DOMAIN}      A  $(curl -s ifconfig.me 2>/dev/null || echo '<sunucu-ip>')"
+ok "Sunucu IP: $SERVER_IP"
 echo ""
-echo "  2) TLS (DNS aktif olunca):"
-echo "     sudo certbot --nginx -d ${DOMAIN} -d www.${DOMAIN} -d api.${DOMAIN} -d admin.${DOMAIN}"
+
+# Domain sslip.io mı yoksa gerçek mi?
+if echo "$DOMAIN" | grep -qE "sslip\.io|nip\.io"; then
+  ok "sslip.io domain'i kullanılıyor — DNS otomatik çözümlenir"
+  echo ""
+  ok "Şimdi tarayıcıdan aç:"
+  echo "  http://$DOMAIN              → web"
+  echo "  http://api.$DOMAIN          → API"
+  echo "  http://admin.$DOMAIN        → admin"
+  echo ""
+  warn "Sonraki adımlar:"
+  echo ""
+  echo "  1) TLS al (HTTPS):"
+  echo "     sudo apt install -y certbot python3-certbot-nginx"
+  echo "     sudo certbot --nginx -d $DOMAIN -d api.$DOMAIN -d admin.$DOMAIN"
+  echo ""
+  echo "  2) Gerçek API anahtarları:"
+  echo "     nano $APP_DIR/api/.env"
+  echo "     pm2 restart all"
+else
+  warn "Sonraki adımlar:"
+  echo ""
+  echo "  1) DNS Cloudflare panelinde:"
+  echo "     $DOMAIN              A  $SERVER_IP"
+  echo "     www.$DOMAIN          A  $SERVER_IP"
+  echo "     api.$DOMAIN          A  $SERVER_IP"
+  echo "     admin.$DOMAIN        A  $SERVER_IP"
+  echo "     (Cloudflare proxy DNS-only — certbot için)"
+  echo ""
+  echo "  2) TLS (DNS aktif olunca, ~5dk sonra):"
+  echo "     sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN -d api.$DOMAIN -d admin.$DOMAIN"
+  echo ""
+  echo "  3) Anahtarları doldur:"
+  echo "     nano $APP_DIR/api/.env"
+  echo "     pm2 restart all"
+fi
 echo ""
-echo "  3) Anahtarları doldur:"
-echo "     nano $APP_DIR/api/.env"
-echo "     pm2 restart all"
-echo ""
-echo "  4) Seed (demo verisi):"
+echo "  Demo verisi (opsiyonel):"
 echo "     cd $APP_DIR/api && yarn prisma db seed"
+echo ""
+echo "  PM2:"
+echo "     pm2 list"
+echo "     pm2 logs markaradar-api"
 echo ""
 ok "Kurulum tamam ✓"
