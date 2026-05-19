@@ -1,7 +1,12 @@
 // API client — RSC + Server Action + Route Handler için kullanılabilir.
 import { cookies } from "next/headers";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+// Server-side fetch — INTERNAL_API_URL (private, prod'da localhost:4010 → cert hatası yok)
+// Fallback: NEXT_PUBLIC_API_URL (browser-side için de aynı)
+const API_URL =
+  process.env.INTERNAL_API_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:4000";
 
 export class ApiError extends Error {
   constructor(

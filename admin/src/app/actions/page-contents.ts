@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 async function call(path: string, method: string, body?: unknown) {
   const cookieStr = (await cookies()).toString();

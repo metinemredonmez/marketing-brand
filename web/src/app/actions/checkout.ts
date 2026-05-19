@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 export interface CheckoutResult {
   ok: boolean;

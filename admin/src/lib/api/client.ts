@@ -1,7 +1,11 @@
 // Admin API client — server-side fetch with cookie forwarding
 import { cookies } from "next/headers";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+// Server-side fetch — INTERNAL_API_URL önce (cert hatasını ve gecikmeyi engellemek için)
+const API_URL =
+  process.env.INTERNAL_API_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:4000";
 
 export class ApiError extends Error {
   constructor(
