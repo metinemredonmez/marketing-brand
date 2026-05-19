@@ -4,6 +4,9 @@ const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
 
+  // Docker prod build için minimal output
+  output: process.env.NEXT_OUTPUT_STANDALONE === "true" ? "standalone" : undefined,
+
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [

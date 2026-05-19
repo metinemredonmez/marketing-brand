@@ -1,0 +1,211 @@
+# ═══════════════════════════════════════════════════════════════
+# MarkaRadar — PRODUCTION docker-compose
+#
+# Kullanım (self-hosted VPS / DigitalOcean Droplet / Hetzner):
+#   1) .env.prod dosyasını oluştur (örnek: .env.prod.example)
+#   2) docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#   3) İlk kez: docker compose -f docker-compose.prod.yml exec api yarn prisma migrate deploy
+#
+# Reverse proxy (TLS + domain): Caddy (auto Let's Encrypt) — aşağıda.
+# Cloudflare arkasında çalışıyorsan Caddy'nin TLS'i opsiyonel,
+# ama yine de origin → Caddy → app güvenli.
+# ═══════════════════════════════════════════════════════════════
+
+name: markaradar_prod
+
+services:
+  # ──────────────────────────────── POSTGRES
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-markaradar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-markaradar_prod}
+      TZ: Europe/Istanbul
+      PGTZ: Europe/Istanbul
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-markaradar}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Prod'da host'a expose etmiyoruz — sadece internal network
+    networks:
+      - mr_internal
+
+  # ──────────────────────────────── REDIS
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
+      --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mr_internal
+
+  # ──────────────────────────────── API (NestJS)
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-markaradar}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-markaradar_prod}
+      REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      # Public hostnames (CORS, callback URLs)
+      WEB_URL: ${WEB_URL:-https://markaradar.com}
+      ADMIN_URL: ${ADMIN_URL:-https://admin.markaradar.com}
+      # 3rd party
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      IYZICO_API_KEY: ${IYZICO_API_KEY:-}
+      IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-markaradar-media}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    networks:
+      - mr_internal
+      - mr_public
+
+  # ──────────────────────────────── WORKER (BullMQ jobs)
+  worker:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["node", "dist/worker.js"]
+    environment:
+      NODE_ENV: production
+      WORKER_ENABLED: "true"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-markaradar}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-markaradar_prod}
+      REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    networks:
+      - mr_internal
+
+  # ──────────────────────────────── WEB (Next.js marketing)
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      NEXT_PUBLIC_API_URL: ${API_URL:-https://api.markaradar.com}
+      NEXT_PUBLIC_SITE_URL: ${WEB_URL:-https://markaradar.com}
+      NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_WEB_SENTRY_DSN:-}
+      NEXT_PUBLIC_ENV: production
+      NEXT_PUBLIC_PLAUSIBLE_DOMAIN: ${PLAUSIBLE_DOMAIN:-}
+      NEXT_PUBLIC_POSTHOG_KEY: ${POSTHOG_KEY:-}
+    networks:
+      - mr_public
+
+  # ──────────────────────────────── ADMIN (Next.js panel)
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+      NEXT_PUBLIC_API_URL: ${API_URL:-https://api.markaradar.com}
+      NEXT_PUBLIC_ADMIN_URL: ${ADMIN_URL:-https://admin.markaradar.com}
+      NEXT_PUBLIC_WEB_URL: ${WEB_URL:-https://markaradar.com}
+      NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_ADMIN_SENTRY_DSN:-}
+      NEXT_PUBLIC_ENV: production
+    networks:
+      - mr_public
+
+  # ──────────────────────────────── CADDY (reverse proxy + auto TLS)
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      WEB_DOMAIN: ${WEB_DOMAIN:-markaradar.com}
+      API_DOMAIN: ${API_DOMAIN:-api.markaradar.com}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.markaradar.com}
+    depends_on:
+      - api
+      - web
+      - admin
+    networks:
+      - mr_public
+
+  # ──────────────────────────────── BACKUP cron
+  backup:
+    image: postgres:16-alpine
+    restart: always
+    depends_on:
+      - postgres
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:-markaradar}
+      POSTGRES_DB: ${POSTGRES_DB:-markaradar_prod}
+      BACKUP_RETENTION_DAYS: "14"
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["sh", "-c"]
+    command: |
+      "apk add --no-cache aws-cli &&
+       echo '0 3 * * * /usr/local/bin/backup.sh' | crontab - &&
+       crond -f"
+    networks:
+      - mr_internal
+
+# ═══════════════════════════════════════════════════════════════
+volumes:
+  pg_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  mr_internal:
+  mr_public:

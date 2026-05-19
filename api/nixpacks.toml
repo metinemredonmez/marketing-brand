@@ -1,0 +1,17 @@
+# Nixpacks alternatifi (Railway Dockerfile yerine kullanmak isterse)
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "openssl"]
+
+[phases.install]
+cmds = ["yarn install --frozen-lockfile"]
+
+[phases.build]
+cmds = ["yarn prisma generate", "yarn build"]
+
+[start]
+cmd = "node dist/main.js"
+
+[variables]
+NODE_ENV = "production"
+PORT = "4000"
