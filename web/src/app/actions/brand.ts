@@ -83,28 +83,36 @@ export async function brandSignupAction(
     body: JSON.stringify({ email: body.contactEmail, password: body.password }),
   });
   if (loginRes.ok) {
-    const headers = loginRes.headers as Headers & {
+    let setCookies: string[] = [];
+    const headersExt = loginRes.headers as Headers & {
       getSetCookie?: () => string[];
+      raw?: () => Record<string, string[]>;
     };
-    const setCookieHeader =
-      headers.getSetCookie?.() ??
-      (loginRes.headers.get("set-cookie")
-        ? [loginRes.headers.get("set-cookie") as string]
-        : []);
+    if (typeof headersExt.getSetCookie === "function") {
+      setCookies = headersExt.getSetCookie();
+    } else if (typeof headersExt.raw === "function") {
+      setCookies = headersExt.raw()["set-cookie"] ?? [];
+    } else {
+      const single = loginRes.headers.get("set-cookie");
+      if (single) setCookies = [single];
+    }
     const cookieStore = await cookies();
-    for (const raw of setCookieHeader) {
+    for (const raw of setCookies) {
       if (!raw) continue;
       const [main] = raw.split(";");
-      const [name, value] = main.split("=");
+      const eq = main.indexOf("=");
+      if (eq < 0) continue;
+      const name = main.slice(0, eq).trim();
+      const value = main.slice(eq + 1).trim();
       if (!name || !value) continue;
       cookieStore.set({
-        name: name.trim(),
-        value: value.trim(),
+        name,
+        value,
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/",
-        maxAge: name.trim() === "mr_access" ? 15 * 60 : 30 * 24 * 60 * 60,
+        maxAge: name === "mr_access" ? 15 * 60 : 30 * 24 * 60 * 60,
       });
     }
   }

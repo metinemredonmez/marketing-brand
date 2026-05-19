@@ -16,26 +16,36 @@ function isProd() {
 
 async function forwardSetCookies(res: Response) {
   // API'den gelen Set-Cookie header'larını Next cookie store'a yansıt
-  const headers = res.headers as Headers & {
+  let setCookies: string[] = [];
+  const headersExt = res.headers as Headers & {
     getSetCookie?: () => string[];
+    raw?: () => Record<string, string[]>;
   };
-  const setCookieHeader =
-    headers.getSetCookie?.() ??
-    (res.headers.get("set-cookie") ? [res.headers.get("set-cookie")] : []);
+  if (typeof headersExt.getSetCookie === "function") {
+    setCookies = headersExt.getSetCookie();
+  } else if (typeof headersExt.raw === "function") {
+    setCookies = headersExt.raw()["set-cookie"] ?? [];
+  } else {
+    const single = res.headers.get("set-cookie");
+    if (single) setCookies = [single];
+  }
   const cookieStore = await cookies();
-  for (const raw of setCookieHeader) {
+  for (const raw of setCookies) {
     if (!raw) continue;
     const [main] = raw.split(";");
-    const [name, value] = main.split("=");
+    const eq = main.indexOf("=");
+    if (eq < 0) continue;
+    const name = main.slice(0, eq).trim();
+    const value = main.slice(eq + 1).trim();
     if (!name || !value) continue;
     cookieStore.set({
-      name: name.trim(),
-      value: value.trim(),
+      name,
+      value,
       httpOnly: true,
       secure: isProd(),
       sameSite: "lax",
       path: "/",
-      maxAge: name.trim() === "mr_access" ? 15 * 60 : 30 * 24 * 60 * 60,
+      maxAge: name === "mr_access" ? 15 * 60 : 30 * 24 * 60 * 60,
     });
   }
 }
