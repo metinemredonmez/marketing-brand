@@ -410,7 +410,10 @@ export function PageContentEditor({ page }: Props) {
       const res = await updatePageContent(page.id, {
         title,
         isPublished,
-        blocks,
+        blocks: blocks as unknown as Array<{
+          type: string;
+          [k: string]: unknown;
+        }>,
       });
       if (res.ok) {
         toast.success("Kaydedildi");
