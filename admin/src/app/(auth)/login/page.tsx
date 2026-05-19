@@ -1,31 +1,49 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { loginAction, type AuthFormState } from "@/app/actions/auth";
 import { useTranslations } from "@/lib/i18n/client";
 import { LocaleSwitch } from "@/components/locale/locale-switch";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [state, formAction, isPending] = useActionState<
-    AuthFormState | null,
-    FormData
-  >(loginAction, null);
   const { t } = useTranslations();
+  const [isPending, setIsPending] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Server action başarıyla cookie set ettiyse client-side yönlendir.
-  // Next.js 15'te server action içinde redirect() bazen cookie'leri kaybediyor —
-  // bu nedenle action `redirectTo` döndürüyor, biz burada hard refresh ediyoruz.
-  useEffect(() => {
-    if (state?.ok && state.redirectTo) {
-      // window.location.href full reload yapar — cookie'ler okunur, middleware geçer
-      window.location.href = state.redirectTo;
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setErrorMessage(null);
+    setIsPending(true);
+
+    const fd = new FormData(e.currentTarget);
+    const email = fd.get("email") as string;
+    const password = fd.get("password") as string;
+
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setErrorMessage(data.message ?? "Giriş başarısız");
+        setIsPending(false);
+        return;
+      }
+
+      // Cookie route handler tarafından response'a yazıldı,
+      // browser otomatik kabul etti. Şimdi full reload ile dashboard'a:
+      window.location.href = data.redirectTo ?? "/";
+    } catch {
+      setErrorMessage("Bağlantı hatası");
+      setIsPending(false);
     }
-  }, [state, router]);
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted px-4">
@@ -42,7 +60,7 @@ export default function LoginPage() {
           <LocaleSwitch />
         </div>
 
-        <form action={formAction} className="mt-8 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <div>
             <Label htmlFor="email">{t("login.email")}</Label>
             <Input
@@ -69,9 +87,9 @@ export default function LoginPage() {
             />
           </div>
 
-          {state?.message && !state.ok && (
+          {errorMessage && (
             <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-300">
-              {state.message}
+              {errorMessage}
             </div>
           )}
 
