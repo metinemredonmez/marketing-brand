@@ -50,39 +50,56 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* ─────────────────── HERO — Linear minimal + clean gradient mesh */}
+      {/* ─────────────────── HERO — Linear/Vercel mesh gradient */}
       <section className="relative overflow-hidden border-b bg-background">
-        {/* 1. Background photo — sadece dark mode'da görünür, light'ta tamamen gizli */}
+        {/* 1. Dark mode — neon city photo */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 hidden dark:block dark:bg-[url('https://images.unsplash.com/photo-1492551557933-34265f7af79e?w=2400&q=75&auto=format')] dark:bg-cover dark:bg-center dark:opacity-[0.08] dark:grayscale"
+          className="pointer-events-none absolute inset-0 hidden dark:block dark:bg-[url('https://images.unsplash.com/photo-1492551557933-34265f7af79e?w=2400&q=75&auto=format')] dark:bg-cover dark:bg-center dark:opacity-[0.10] dark:grayscale"
         />
-        {/* 2. Light mode için soft gradient mesh — multi-color blob blur'lar */}
+
+        {/* 2. Light mode — multi-blob mesh gradient (Linear/Vercel style) */}
+        {/* Sol-üst: brand navy halo */}
         <div
           aria-hidden
-          className="pointer-events-none absolute -left-32 top-10 hidden h-[500px] w-[500px] rounded-full bg-brand-500/[0.05] blur-3xl dark:hidden md:block"
+          className="pointer-events-none absolute -left-40 -top-32 h-[600px] w-[600px] rounded-full bg-brand-500/25 blur-[120px] dark:hidden"
         />
+        {/* Sağ-üst: accent orange halo */}
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-32 bottom-10 hidden h-[500px] w-[500px] rounded-full bg-accent/[0.06] blur-3xl dark:hidden md:block"
+          className="pointer-events-none absolute -right-32 -top-24 h-[500px] w-[500px] rounded-full bg-accent/30 blur-[120px] dark:hidden"
         />
-        {/* 3. Üst fade — header'a sıkı geçiş (sadece dark) */}
+        {/* Orta-alt: pink/rose halo (renk geçişi için) */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-background via-background/80 to-transparent"
+          className="pointer-events-none absolute left-1/2 -bottom-32 h-[500px] w-[700px] -translate-x-1/2 rounded-full bg-pink-300/30 blur-[120px] dark:hidden"
         />
-        {/* 4. Alt fade */}
+        {/* Sol-alt: cyan/sky tint */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background via-background/90 to-transparent"
+          className="pointer-events-none absolute -left-24 -bottom-24 h-[400px] w-[400px] rounded-full bg-sky-300/25 blur-[120px] dark:hidden"
         />
-        {/* 5. Dot grid pattern */}
+
+        {/* 3. Dark için sağ üst accent (light'ta yukarıdaki halolar yetiyor) */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-24 -right-24 hidden h-[400px] w-[400px] rounded-full bg-accent/15 blur-3xl dark:block"
+        />
+
+        {/* 4. Üst fade — header'a yumuşak geçiş */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background via-background/70 to-transparent"
+        />
+
+        {/* 5. Alt fade — bir sonraki section'a temiz geçiş */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-background via-background/90 to-transparent"
+        />
+
+        {/* 6. Dot grid pattern (her şeyin üstünde, içerikten önce) */}
         <GridPattern variant="dots" />
-        {/* 6. Sağ üst köşede ince accent vurgu */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-24 -right-24 h-[400px] w-[400px] rounded-full bg-accent/[0.06] blur-3xl"
-        />
 
         <div className="container relative mx-auto max-w-5xl px-4 py-24 md:py-32 text-center">
           <div className="inline-flex items-center gap-2 rounded-full border bg-card/50 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
