@@ -18,7 +18,6 @@ export async function Header() {
     { href: "/kategori/ai-marketing", label: t("marketing.nav.aiMarketing") },
     { href: "/kategori/marka-hamlesi", label: "Marka Hamlesi" },
     { href: "/ajans-rehberi", label: t("marketing.nav.agencyDirectory") },
-    { href: "/is-ilanlari", label: t("marketing.nav.jobs") },
     { href: "/akademi", label: t("marketing.nav.academy") },
     { href: "/premium", label: t("marketing.nav.premium") },
   ];
