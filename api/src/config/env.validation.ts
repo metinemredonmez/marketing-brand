@@ -28,6 +28,8 @@ export const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_REFRESH_EXPIRES_IN: z.string().default("30d"),
   COOKIE_DOMAIN: z.string().default("localhost"),
+  /** "true" | "false" — override. Boş ise NODE_ENV'e göre karar. */
+  COOKIE_SECURE: z.enum(["true", "false"]).optional(),
 
   // Storage
   STORAGE_DRIVER: z.enum(["s3", "local"]).default("s3"),

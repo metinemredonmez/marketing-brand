@@ -149,12 +149,23 @@ export class AuthController {
 
   private setCookies(res: Response, access: string, refresh: string) {
     const isProd = this.config.get<string>("NODE_ENV") === "production";
-    const domain = this.config.get<string>("COOKIE_DOMAIN", "localhost");
+    // COOKIE_SECURE override — IP + self-signed cert demo'da "false" yap
+    // (Default: production'da true)
+    const secureOverride = this.config.get<string>("COOKIE_SECURE");
+    const secure =
+      secureOverride === "false"
+        ? false
+        : secureOverride === "true"
+          ? true
+          : isProd;
+    // Domain boş string ise atla (cookie current host'a set olur)
+    const rawDomain = this.config.get<string>("COOKIE_DOMAIN");
+    const domain = rawDomain && rawDomain.trim() !== "" ? rawDomain : undefined;
     const base = {
       httpOnly: true,
-      secure: isProd,
+      secure,
       sameSite: "lax" as const,
-      domain,
+      ...(domain ? { domain } : {}),
       path: "/",
     };
     res.cookie("mr_access", access, { ...base, maxAge: 15 * 60 * 1000 });
