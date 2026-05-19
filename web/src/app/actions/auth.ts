@@ -8,6 +8,7 @@ const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL 
 export interface AuthFormState {
   ok: boolean;
   message?: string;
+  redirectTo?: string;
 }
 
 function isProd() {
@@ -77,7 +78,8 @@ export async function loginAction(
     return { ok: false, message: "Bağlantı hatası" };
   }
 
-  redirect("/");
+  // Next.js 15 server action redirect bug workaround — client tarafı yönlendir.
+  return { ok: true, redirectTo: "/" };
 }
 
 export async function registerAction(

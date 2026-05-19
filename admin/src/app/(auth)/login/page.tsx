@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,11 +10,22 @@ import { useTranslations } from "@/lib/i18n/client";
 import { LocaleSwitch } from "@/components/locale/locale-switch";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [state, formAction, isPending] = useActionState<
     AuthFormState | null,
     FormData
   >(loginAction, null);
   const { t } = useTranslations();
+
+  // Server action başarıyla cookie set ettiyse client-side yönlendir.
+  // Next.js 15'te server action içinde redirect() bazen cookie'leri kaybediyor —
+  // bu nedenle action `redirectTo` döndürüyor, biz burada hard refresh ediyoruz.
+  useEffect(() => {
+    if (state?.ok && state.redirectTo) {
+      // window.location.href full reload yapar — cookie'ler okunur, middleware geçer
+      window.location.href = state.redirectTo;
+    }
+  }, [state, router]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted px-4">

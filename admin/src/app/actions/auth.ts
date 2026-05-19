@@ -3,11 +3,15 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const API_URL =
+  process.env.INTERNAL_API_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:4000";
 
 export interface AuthFormState {
   ok: boolean;
   message?: string;
+  redirectTo?: string;
 }
 
 function isProd() {
@@ -31,6 +35,14 @@ async function forwardSetCookies(res: Response) {
     const single = res.headers.get("set-cookie");
     if (single) setCookies = [single];
   }
+
+  // eslint-disable-next-line no-console
+  console.log(
+    "[loginAction] forwarding",
+    setCookies.length,
+    "cookies:",
+    setCookies.map((c) => c.split(";")[0].split("=")[0]).join(","),
+  );
 
   const cookieStore = await cookies();
   for (const raw of setCookies) {
@@ -90,7 +102,9 @@ export async function loginAction(
     return { ok: false, message: "Bağlantı hatası" };
   }
 
-  redirect("/");
+  // Next.js 15'te server action içinde redirect() bazen cookie'leri kaybediyor.
+  // Client-side router.push ile yönlendiriyoruz — cookies kesin commit edilsin.
+  return { ok: true, redirectTo: "/" };
 }
 
 export async function logoutAction() {

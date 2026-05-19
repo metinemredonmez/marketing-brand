@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,13 @@ export default function LoginPage() {
     FormData
   >(loginAction, null);
   const { t } = useTranslations();
+
+  // Next.js 15 server action redirect bug workaround — full reload ile cookie aktif
+  useEffect(() => {
+    if (state?.ok && state.redirectTo) {
+      window.location.href = state.redirectTo;
+    }
+  }, [state]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted px-4 py-12">
