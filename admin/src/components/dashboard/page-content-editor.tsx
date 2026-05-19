@@ -348,7 +348,8 @@ interface Props {
     slug: string;
     locale: string;
     title: string | null;
-    blocks: Block[];
+    // API generic shape — runtime'da type-narrow ediyoruz
+    blocks: Array<{ type: string; [k: string]: unknown }>;
     isPublished: boolean;
   };
 }
@@ -358,7 +359,7 @@ export function PageContentEditor({ page }: Props) {
   const [title, setTitle] = useState(page.title ?? "");
   const [isPublished, setIsPublished] = useState(page.isPublished);
   const [blocks, setBlocks] = useState<Block[]>(
-    Array.isArray(page.blocks) ? (page.blocks as Block[]) : [],
+    Array.isArray(page.blocks) ? (page.blocks as unknown as Block[]) : [],
   );
   const [isPending, startTransition] = useTransition();
 
