@@ -1,0 +1,1579 @@
+// MarkaRadar — Prisma schema (Sprint 1: temel tablolar)
+// Tüm tablolar zamanla buraya eklenecek. Şu an: User + Category + Tag + Article minimum set.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────────────────────────
+// USERS & AUTH
+// ──────────────────────────────────────────────────────────────
+
+enum UserRole {
+  super_admin
+  editor
+  writer
+  social_manager
+  sales
+  agency_user
+  brand_user
+  reader
+}
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique @db.VarChar(255)
+  passwordHash  String    @map("password_hash") @db.VarChar(255)
+  fullName      String    @map("full_name") @db.VarChar(150)
+  role          UserRole  @default(reader)
+  avatarUrl     String?   @map("avatar_url")
+  bio           String?   @db.Text
+  linkedinUrl   String?   @map("linkedin_url")
+  twitterUrl    String?   @map("twitter_url")
+  isActive      Boolean   @default(true) @map("is_active")
+  emailVerified Boolean   @default(false) @map("email_verified")
+  lastLoginAt   DateTime? @map("last_login_at") @db.Timestamptz()
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  articles            Article[]
+  refreshTokens       RefreshToken[]
+  notifications       Notification[]
+  calendarEventsOwned CalendarEvent[]
+  subscriptions       Subscription[]
+  pageContentsUpdated PageContent[]   @relation("PageContentUpdatedBy")
+
+  @@index([role])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz()
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz()
+  userAgent String?  @map("user_agent") @db.VarChar(500)
+  ipAddress String?  @map("ip_address") @db.VarChar(45)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+// ──────────────────────────────────────────────────────────────
+// CONTENT
+// ──────────────────────────────────────────────────────────────
+
+model Category {
+  id             String   @id @default(uuid()) @db.Uuid
+  slug           String   @unique @db.VarChar(120)
+  name           String   @db.VarChar(120)
+  description    String?  @db.Text
+  parentId       String?  @map("parent_id") @db.Uuid
+  coverUrl       String?  @map("cover_url")
+  seoTitle       String?  @map("seo_title") @db.VarChar(160)
+  seoDescription String?  @map("seo_description") @db.VarChar(320)
+  orderIndex     Int      @default(0) @map("order_index")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+  articles Article[]
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+enum TagType {
+  topic
+  brand
+  agency
+  person
+  campaign
+  tool
+}
+
+model Tag {
+  id        String   @id @default(uuid()) @db.Uuid
+  slug      String   @unique @db.VarChar(120)
+  name      String   @db.VarChar(120)
+  type      TagType  @default(topic)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  articles ArticleTag[]
+
+  @@index([type])
+  @@map("tags")
+}
+
+enum ArticleStatus {
+  draft
+  in_review
+  scheduled
+  published
+  archived
+}
+
+model Article {
+  id          String        @id @default(uuid()) @db.Uuid
+  slug        String        @unique @db.VarChar(200)
+  title       String        @db.VarChar(200)
+  spot        String?       @db.VarChar(320)
+  body        String        @db.Text
+  coverUrl    String?       @map("cover_url")
+  coverAlt    String?       @map("cover_alt") @db.VarChar(200)
+  categoryId  String?       @map("category_id") @db.Uuid
+  authorId    String?       @map("author_id") @db.Uuid
+  readingTime Int?          @map("reading_time_min")
+
+  // AI alanları
+  aiSummary         String?  @map("ai_summary") @db.Text
+  aiWhyMatters      String?  @map("ai_why_matters") @db.Text
+  aiBrandTakeaways  Json?    @map("ai_brand_takeaways")
+  aiAgencyTakeaways Json?    @map("ai_agency_takeaways")
+  aiTrAdaptation    String?  @map("ai_tr_adaptation") @db.Text
+  aiGeneratedBy     String?  @map("ai_generated_by") @db.VarChar(50)
+  aiGeneratedAt     DateTime? @map("ai_generated_at") @db.Timestamptz()
+  aiHumanRatio      Int?     @map("ai_human_ratio") // 0-100: ne kadar AI
+
+  // Yayın
+  status      ArticleStatus @default(draft)
+  publishedAt DateTime?     @map("published_at") @db.Timestamptz()
+  scheduledAt DateTime?     @map("scheduled_at") @db.Timestamptz()
+
+  // SEO
+  seoTitle       String? @map("seo_title") @db.VarChar(160)
+  seoDescription String? @map("seo_description") @db.VarChar(320)
+  canonicalUrl   String? @map("canonical_url")
+  ogImageUrl     String? @map("og_image_url")
+
+  // Premium
+  isPremium      Boolean @default(false) @map("is_premium")
+
+  // Sponsorluk
+  isSponsored    Boolean @default(false) @map("is_sponsored")
+  sponsorLabel   String? @map("sponsor_label") @db.VarChar(100)
+
+  // Kaynak
+  sourceUrl    String? @map("source_url")
+  sourceName   String? @map("source_name") @db.VarChar(120)
+
+  // Metrikler
+  viewCount    BigInt @default(0) @map("view_count")
+  shareCount   Int    @default(0) @map("share_count")
+
+  // Audit
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+
+  category Category?    @relation(fields: [categoryId], references: [id])
+  author         User?           @relation(fields: [authorId], references: [id])
+  tags           ArticleTag[]
+  calendarEvents CalendarEvent[]
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([categoryId, publishedAt(sort: Desc)])
+  @@index([slug])
+  @@map("articles")
+}
+
+model ArticleTag {
+  articleId String @map("article_id") @db.Uuid
+  tagId     String @map("tag_id") @db.Uuid
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, tagId])
+  @@map("article_tags")
+}
+
+// ──────────────────────────────────────────────────────────────
+// MAIL — gelen (IMAP) + giden (SMTP/Resend) tek panel
+// ──────────────────────────────────────────────────────────────
+
+enum EmailDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum EmailStatus {
+  UNREAD
+  READ
+  DELETED
+}
+
+model EmailMessage {
+  id            String         @id @default(uuid()) @db.Uuid
+  direction     EmailDirection
+  status        EmailStatus    @default(UNREAD)
+
+  // IMAP dedup
+  imapUid       String?        @map("imap_uid") @db.VarChar(50)
+  imapFolder    String         @default("INBOX") @map("imap_folder") @db.VarChar(50)
+  messageId     String?        @map("message_id") @db.VarChar(500)
+  inReplyTo     String?        @map("in_reply_to") @db.VarChar(500)
+  threadKey     String?        @map("thread_key") @db.VarChar(200)
+
+  // Adresler
+  fromAddress   String         @map("from_address") @db.VarChar(255)
+  fromName      String?        @map("from_name") @db.VarChar(200)
+  toAddresses   String         @map("to_addresses") @db.Text
+  ccAddresses   String?        @map("cc_addresses") @db.Text
+
+  // İçerik
+  subject       String         @default("") @db.VarChar(500)
+  bodyText      String         @default("") @map("body_text") @db.Text
+  bodyHtml      String         @default("") @map("body_html") @db.Text
+  hasAttachment Boolean        @default(false) @map("has_attachment")
+
+  receivedAt    DateTime       @default(now()) @map("received_at") @db.Timestamptz()
+  fetchedAt     DateTime       @default(now()) @map("fetched_at") @db.Timestamptz()
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@unique([imapFolder, imapUid])
+  @@index([direction, status, receivedAt(sort: Desc)])
+  @@index([threadKey])
+  @@map("email_messages")
+}
+
+// ──────────────────────────────────────────────────────────────
+// CALENDAR — editöryel, etkinlik, ajans toplantısı, hatırlatma
+// ──────────────────────────────────────────────────────────────
+
+enum CalendarEventType {
+  EDITORIAL        // Makale yayın planı
+  MEETING          // CMO / ajans görüşmesi
+  EVENT            // Şirket etkinliği (zirve, ödül töreni)
+  WEBINAR          // Premium webinar
+  COURSE_SESSION   // Akademi kohort oturumu
+  CAMPAIGN         // Pazarlama kampanyası aksiyon
+  REMINDER         // Genel hatırlatma
+  OTHER
+}
+
+enum CalendarEventStatus {
+  PLANNED
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+model CalendarEvent {
+  id               String              @id @default(uuid()) @db.Uuid
+  type             CalendarEventType
+  status           CalendarEventStatus @default(PLANNED)
+  title            String              @db.VarChar(300)
+  description      String?             @db.Text
+  startsAt         DateTime            @map("starts_at") @db.Timestamptz()
+  endsAt           DateTime?           @map("ends_at") @db.Timestamptz()
+  allDay           Boolean             @default(false) @map("all_day")
+  color            String?             @db.VarChar(20)
+
+  // Lokasyon (fiziksel + sanal)
+  location         String?             @db.VarChar(300)
+  meetingUrl       String?             @map("meeting_url") @db.Text
+
+  // Davetli e-postaları
+  attendees        String[]            @default([])
+
+  // Domain bağlantıları (opsiyonel)
+  articleId        String?             @map("article_id") @db.Uuid
+  article          Article?            @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  agencyId         String?             @map("agency_id") @db.Uuid
+  eventRefId       String?             @map("event_ref_id") @db.Uuid
+  courseCohortId   String?             @map("course_cohort_id") @db.Uuid
+
+  // Hatırlatma + tekrarlanma
+  remindBefore     Int?                @map("remind_before") // dakika cinsinden
+  recurrence       String?             @db.VarChar(50)       // daily/weekly/monthly
+
+  notes            String?             @db.Text
+
+  createdById      String?             @map("created_by") @db.Uuid
+  createdBy        User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([startsAt])
+  @@index([type, status])
+  @@index([articleId])
+  @@index([createdById])
+  @@map("calendar_events")
+}
+
+// ──────────────────────────────────────────────────────────────
+// NOTIFICATIONS — in-app + WebSocket gerçek-zamanlı
+// ──────────────────────────────────────────────────────────────
+
+model Notification {
+  id          String    @id @default(uuid()) @db.Uuid
+  type        String    @db.VarChar(80)
+  // Bkz notifications.service.ts NotificationType
+  title       String    @db.VarChar(300)
+  body        String?   @db.Text
+  link        String?   @db.VarChar(500)
+  metadata    Json?
+  read        Boolean   @default(false)
+  readAt      DateTime? @map("read_at") @db.Timestamptz()
+
+  // Belirli kullanıcıya (null = tüm admin'lere broadcast)
+  userId      String?   @map("user_id") @db.Uuid
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([userId, read, createdAt(sort: Desc)])
+  @@index([type])
+  @@map("notifications")
+}
+
+// ──────────────────────────────────────────────────────────────
+// AUDIT LOG — kim ne yaptı (KVKK için zorunlu)
+// ──────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorId     String?  @map("actor_id") @db.Uuid
+  actorEmail  String?  @map("actor_email") @db.VarChar(255)
+  action      String   @db.VarChar(80)  // article.publish, user.role_change, vb
+  resource    String   @db.VarChar(50)  // article, user, agency, subscription
+  resourceId  String?  @map("resource_id") @db.VarChar(100)
+  success     Boolean  @default(true)
+  changes     Json?    // before/after diff
+  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  userAgent   String?  @map("user_agent") @db.VarChar(500)
+  errorMessage String? @map("error_message") @db.Text
+
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([resource, resourceId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+// ──────────────────────────────────────────────────────────────
+// EMAIL VERIFICATION & PASSWORD RESET tokenları
+// ──────────────────────────────────────────────────────────────
+
+model VerificationToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @map("token_hash") @db.VarChar(255)
+  type      String   @db.VarChar(40) // email_verify | password_reset
+  expiresAt DateTime @map("expires_at") @db.Timestamptz()
+  usedAt    DateTime? @map("used_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([userId, type])
+  @@index([tokenHash])
+  @@map("verification_tokens")
+}
+
+// ──────────────────────────────────────────────────────────────
+// SUBSCRIPTIONS — MarkaRadar+ premium üyelik
+// ──────────────────────────────────────────────────────────────
+
+enum SubscriptionTier {
+  founding_member    // $49/yr lifetime price lock
+  lite               // $99/yr
+  pro                // $499/yr — CMO Club Slack erişimi
+  enterprise         // $2999/yr — 5 koltuk
+}
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due           // ödeme başarısız, retry'da
+  canceled
+  expired
+  paused
+}
+
+enum PaymentProvider {
+  stripe
+  iyzico
+  manual
+}
+
+enum BillingInterval {
+  monthly
+  yearly
+}
+
+model Subscription {
+  id                     String              @id @default(uuid()) @db.Uuid
+  userId                 String              @map("user_id") @db.Uuid
+  tier                   SubscriptionTier
+  status                 SubscriptionStatus  @default(trialing)
+  billingInterval        BillingInterval     @default(yearly) @map("billing_interval")
+
+  amountUsd              Decimal             @default(0) @map("amount_usd") @db.Decimal(10, 2)
+  amountTry              Decimal             @default(0) @map("amount_try") @db.Decimal(12, 2)
+  currency               String              @default("USD") @db.VarChar(3)
+
+  provider               PaymentProvider
+  providerCustomerId     String?             @map("provider_customer_id") @db.VarChar(120)
+  providerSubscriptionId String?             @unique @map("provider_subscription_id") @db.VarChar(120)
+
+  trialEndsAt            DateTime?           @map("trial_ends_at") @db.Timestamptz()
+  startedAt              DateTime?           @map("started_at") @db.Timestamptz()
+  currentPeriodStart     DateTime?           @map("current_period_start") @db.Timestamptz()
+  currentPeriodEnd       DateTime?           @map("current_period_end") @db.Timestamptz()
+  cancelAtPeriodEnd      Boolean             @default(false) @map("cancel_at_period_end")
+  canceledAt             DateTime?           @map("canceled_at") @db.Timestamptz()
+
+  failedPaymentCount     Int                 @default(0) @map("failed_payment_count")
+  lastPaymentError       String?             @map("last_payment_error") @db.Text
+  nextRetryAt            DateTime?           @map("next_retry_at") @db.Timestamptz()
+
+  metadata               Json?
+
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt              DateTime            @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user                   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments               Payment[]
+
+  @@index([userId, status])
+  @@index([status, currentPeriodEnd])
+  @@index([nextRetryAt])
+  @@map("subscriptions")
+}
+
+enum PaymentStatus {
+  pending
+  succeeded
+  failed
+  refunded
+  canceled
+}
+
+model Payment {
+  id                String          @id @default(uuid()) @db.Uuid
+  subscriptionId    String?         @map("subscription_id") @db.Uuid
+  userId            String          @map("user_id") @db.Uuid
+
+  provider          PaymentProvider
+  providerPaymentId String?         @unique @map("provider_payment_id") @db.VarChar(120)
+  providerInvoiceId String?         @map("provider_invoice_id") @db.VarChar(120)
+
+  amount            Decimal         @db.Decimal(12, 2)
+  currency          String          @db.VarChar(3)
+  status            PaymentStatus   @default(pending)
+  description       String?         @db.VarChar(300)
+
+  errorCode         String?         @map("error_code") @db.VarChar(80)
+  errorMessage      String?         @map("error_message") @db.Text
+
+  paidAt            DateTime?       @map("paid_at") @db.Timestamptz()
+  refundedAt        DateTime?       @map("refunded_at") @db.Timestamptz()
+
+  metadata          Json?
+
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+
+  subscription      Subscription?   @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([subscriptionId])
+  @@map("payments")
+}
+
+model WebhookEvent {
+  id          String          @id @default(uuid()) @db.Uuid
+  provider    PaymentProvider
+  eventId     String          @map("event_id") @db.VarChar(200)
+  eventType   String          @map("event_type") @db.VarChar(100)
+  payload     Json
+  processedAt DateTime?       @map("processed_at") @db.Timestamptz()
+  error       String?         @db.Text
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@unique([provider, eventId])
+  @@index([processedAt])
+  @@map("webhook_events")
+}
+
+// ──────────────────────────────────────────────────────────────
+// AGENCIES — ajans rehberi + tier sistemi
+// ──────────────────────────────────────────────────────────────
+
+enum AgencyTier {
+  free
+  basic        // 990 TL/ay
+  premium      // 2.490 TL/ay
+  featured     // 6.900 TL/ay
+  elite        // 14.900 TL/ay
+}
+
+enum AgencyVerificationLevel {
+  unverified
+  email_verified
+  linkedin_verified
+  fully_verified  // editör görüşme yapmış
+}
+
+model Agency {
+  id                String        @id @default(uuid()) @db.Uuid
+  slug              String        @unique @db.VarChar(150)
+  name              String        @db.VarChar(150)
+  logoUrl           String?       @map("logo_url")
+  coverUrl          String?       @map("cover_url")
+  tagline           String?       @db.VarChar(300)
+  description       String?       @db.Text
+
+  // Şirket bilgi
+  foundedYear       Int?          @map("founded_year")
+  teamSizeRange     String?       @map("team_size_range") @db.VarChar(50)
+  // 1-10, 11-50, 51-100, 100+
+  city              String?       @db.VarChar(80)
+  country           String        @default("TR") @db.VarChar(80)
+  website           String?       @db.Text
+  email             String?       @db.VarChar(255)
+  phone             String?       @db.VarChar(50)
+  linkedinUrl       String?       @map("linkedin_url") @db.Text
+  instagramUrl      String?       @map("instagram_url") @db.Text
+
+  // Servisler / endüstri / referanslar
+  services          String[]      @default([])
+  industries        String[]      @default([])
+  clientReferences  String[]      @default([]) @map("client_references")
+
+  // Awards + featured works
+  awards            Json?
+  featuredWorks     Json?         @map("featured_works")
+
+  // Tier yönetimi
+  tier              AgencyTier    @default(free)
+  tierStartsAt      DateTime?     @map("tier_starts_at") @db.Timestamptz()
+  tierEndsAt        DateTime?     @map("tier_ends_at") @db.Timestamptz()
+
+  // Verification
+  verificationLevel AgencyVerificationLevel @default(unverified) @map("verification_level")
+  verifiedAt        DateTime?     @map("verified_at") @db.Timestamptz()
+
+  // Cached rating (review aggregate)
+  ratingAvg         Decimal       @default(0) @map("rating_avg") @db.Decimal(3, 2)
+  reviewCount       Int           @default(0) @map("review_count")
+
+  // Audit
+  ownerUserId       String?       @map("owner_user_id") @db.Uuid
+  isActive          Boolean       @default(true) @map("is_active")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz()
+
+  reviews           AgencyReview[]
+
+  @@index([tier, isActive])
+  @@index([city])
+  @@index([ratingAvg(sort: Desc), reviewCount(sort: Desc)])
+  @@map("agencies")
+}
+
+enum ReviewVerificationStatus {
+  pending           // otomatik kontrol bekliyor
+  email_pending     // doğrulama maili gönderildi, click bekleniyor
+  email_verified
+  linkedin_verified
+  fully_verified    // editör görüşme yapmış
+  rejected
+}
+
+enum ReviewPublicationStatus {
+  draft
+  submitted          // moderasyon kuyruğunda
+  published
+  hidden_by_admin
+  withdrawn_by_user
+}
+
+model AgencyReview {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  agencyId           String                    @map("agency_id") @db.Uuid
+
+  // Reviewer (gerçek ad zorunlu — anonim yok)
+  reviewerName       String                    @map("reviewer_name") @db.VarChar(150)
+  reviewerRole       String?                   @map("reviewer_role") @db.VarChar(100)
+  reviewerEmail      String                    @map("reviewer_email") @db.VarChar(255)
+  reviewerCompany    String?                   @map("reviewer_company") @db.VarChar(150)
+  reviewerLinkedin   String?                   @map("reviewer_linkedin") @db.Text
+
+  // Proje detayları
+  projectType        String?                   @map("project_type") @db.VarChar(80)
+  projectBudgetRange String?                   @map("project_budget_range") @db.VarChar(50)
+  projectDurationMonths Int?                   @map("project_duration_months")
+  projectStartedAt   DateTime?                 @map("project_started_at") @db.Timestamptz()
+
+  // Puanlama
+  ratingOverall      Int                       @map("rating_overall")
+  ratingQuality      Int                       @map("rating_quality")
+  ratingCommunication Int                      @map("rating_communication")
+  ratingTimeline     Int                       @map("rating_timeline")
+  ratingValue        Int                       @map("rating_value")
+
+  title              String                    @db.VarChar(200)
+  content            String                    @db.Text
+  pros               String?                   @db.Text
+  cons               String?                   @db.Text
+  wouldWorkAgain     String?                   @map("would_work_again") @db.VarChar(20)
+  // yes | maybe | no
+  npsScore           Int?                      @map("nps_score")
+
+  // Verification + moderation state
+  verificationStatus ReviewVerificationStatus  @default(pending) @map("verification_status")
+  verificationToken  String?                   @map("verification_token") @db.VarChar(255)
+  verifiedAt         DateTime?                 @map("verified_at") @db.Timestamptz()
+  publicationStatus  ReviewPublicationStatus   @default(submitted) @map("publication_status")
+  moderationNotes    String?                   @map("moderation_notes") @db.Text
+  moderatedById      String?                   @map("moderated_by") @db.Uuid
+
+  // Anti-fraud
+  ipAddress          String?                   @map("ip_address") @db.VarChar(45)
+  userAgent          String?                   @map("user_agent") @db.VarChar(500)
+  similarityScore    Decimal?                  @map("similarity_score") @db.Decimal(4, 3)
+
+  // Right to reply
+  agencyResponse     String?                   @map("agency_response") @db.Text
+  agencyResponseAt   DateTime?                 @map("agency_response_at") @db.Timestamptz()
+
+  // Audit
+  createdAt          DateTime                  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime                  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  agency             Agency                    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@index([agencyId, publicationStatus])
+  @@index([verificationStatus])
+  @@index([publicationStatus, createdAt(sort: Desc)])
+  @@map("agency_reviews")
+}
+
+// ──────────────────────────────────────────────────────────────
+// JOBS + EMPLOYER BRAND
+// ──────────────────────────────────────────────────────────────
+
+enum JobPlan {
+  basic
+  featured
+  premium_distribution
+}
+
+enum JobStatus {
+  pending
+  active
+  expired
+  filled
+  withdrawn
+}
+
+enum SeniorityLevel {
+  intern
+  junior
+  mid
+  senior
+  lead
+  director
+}
+
+enum EmploymentType {
+  full_time
+  part_time
+  freelance
+  contract
+  internship
+}
+
+enum EmployerBrandPlan {
+  starter
+  growth
+  premium
+}
+
+model EmployerBrand {
+  id              String              @id @default(uuid()) @db.Uuid
+  slug            String              @unique @db.VarChar(150)
+  companyName     String              @map("company_name") @db.VarChar(150)
+  tagline         String?             @db.VarChar(300)
+  about           String?             @db.Text
+  cultureVideoUrl String?             @map("culture_video_url") @db.Text
+  perks           Json?
+  teamSize        String?             @map("team_size") @db.VarChar(50)
+  foundedYear     Int?                @map("founded_year")
+  website         String?             @db.Text
+  linkedinUrl     String?             @map("linkedin_url") @db.Text
+  instagramUrl    String?             @map("instagram_url") @db.Text
+  officePhotos    String[]            @default([]) @map("office_photos")
+  teamPhotos      String[]            @default([]) @map("team_photos")
+  values          Json?
+  testimonials    Json?
+
+  plan            EmployerBrandPlan   @default(starter)
+  planStartsAt    DateTime?           @map("plan_starts_at") @db.Timestamptz()
+  planEndsAt      DateTime?           @map("plan_ends_at") @db.Timestamptz()
+
+  isActive        Boolean             @default(true) @map("is_active")
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz()
+
+  jobs            JobPost[]
+
+  @@index([plan, isActive])
+  @@map("employer_brands")
+}
+
+model JobPost {
+  id              String              @id @default(uuid()) @db.Uuid
+  slug            String              @unique @db.VarChar(200)
+  title           String              @db.VarChar(200)
+  description     String              @db.Text
+
+  companyName     String              @map("company_name") @db.VarChar(150)
+  employerBrandId String?             @map("employer_brand_id") @db.Uuid
+
+  category        String              @db.VarChar(80)
+  seniority       SeniorityLevel
+  employmentType  EmploymentType      @map("employment_type")
+
+  location        String?             @db.VarChar(100)
+  isRemote        Boolean             @default(false) @map("is_remote")
+
+  salaryMin       Decimal?            @map("salary_min") @db.Decimal(10, 2)
+  salaryMax       Decimal?            @map("salary_max") @db.Decimal(10, 2)
+  currency        String              @default("TRY") @db.VarChar(10)
+
+  applyUrl        String?             @map("apply_url") @db.Text
+  applyEmail      String?             @map("apply_email") @db.VarChar(255)
+
+  plan            JobPlan             @default(basic)
+  publishedAt     DateTime?           @map("published_at") @db.Timestamptz()
+  expiresAt       DateTime?           @map("expires_at") @db.Timestamptz()
+
+  status          JobStatus           @default(pending)
+  viewCount       Int                 @default(0) @map("view_count")
+  applyCount      Int                 @default(0) @map("apply_count")
+
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz()
+
+  employerBrand   EmployerBrand?      @relation(fields: [employerBrandId], references: [id], onDelete: SetNull)
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([category])
+  @@index([seniority])
+  @@index([employerBrandId])
+  @@map("job_posts")
+}
+
+// ──────────────────────────────────────────────────────────────
+// COURSES — MarkaRadar Akademi
+// ──────────────────────────────────────────────────────────────
+
+enum CourseFormat {
+  online_cohort      // 8 hafta, canlı Zoom
+  self_paced         // video + ödev
+  in_person          // İstanbul'da yüz yüze
+}
+
+enum CourseLevel {
+  beginner
+  intermediate
+  advanced
+}
+
+enum CohortStatus {
+  open                // başvurular alınıyor
+  full                // doldu
+  in_progress         // başladı
+  completed
+  canceled
+}
+
+enum EnrollmentStatus {
+  pending
+  paid
+  completed
+  refunded
+  canceled
+}
+
+model Course {
+  id              String              @id @default(uuid()) @db.Uuid
+  slug            String              @unique @db.VarChar(200)
+  title           String              @db.VarChar(200)
+  subtitle        String?             @db.VarChar(300)
+  description     String?             @db.Text
+  coverUrl        String?             @map("cover_url") @db.Text
+
+  format          CourseFormat
+  level           CourseLevel         @default(intermediate)
+  durationWeeks   Int?                @map("duration_weeks")
+
+  priceTry        Decimal             @default(0) @map("price_try") @db.Decimal(12, 2)
+  priceUsd        Decimal             @default(0) @map("price_usd") @db.Decimal(10, 2)
+  earlyBirdPriceTry Decimal?          @map("early_bird_price_try") @db.Decimal(12, 2)
+  capacity        Int?
+
+  syllabus        Json?               // [{week:1, title:"", topics:[]}]
+  outcomes        String[]            @default([])
+  prerequisites   String[]            @default([])
+  instructorIds   String[]            @default([]) @map("instructor_ids")
+
+  isActive        Boolean             @default(true) @map("is_active")
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz()
+
+  cohorts         CourseCohort[]
+
+  @@map("courses")
+}
+
+model CourseCohort {
+  id              String              @id @default(uuid()) @db.Uuid
+  courseId        String              @map("course_id") @db.Uuid
+  cohortNumber    Int                 @map("cohort_number")
+  startDate       DateTime            @map("start_date") @db.Date
+  endDate         DateTime            @map("end_date") @db.Date
+  capacity        Int?
+  enrolledCount   Int                 @default(0) @map("enrolled_count")
+  status          CohortStatus        @default(open)
+  zoomLink        String?             @map("zoom_link") @db.Text
+  slackChannelId  String?             @map("slack_channel_id") @db.VarChar(80)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+
+  course          Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  enrollments     CourseEnrollment[]
+
+  @@unique([courseId, cohortNumber])
+  @@index([startDate])
+  @@map("course_cohorts")
+}
+
+model CourseEnrollment {
+  id                String              @id @default(uuid()) @db.Uuid
+  cohortId          String              @map("cohort_id") @db.Uuid
+  userId            String              @map("user_id") @db.Uuid
+  amountPaidTry     Decimal             @default(0) @map("amount_paid_try") @db.Decimal(12, 2)
+  paymentMethod     String?             @map("payment_method") @db.VarChar(50)
+  status            EnrollmentStatus    @default(pending)
+  invoiceUrl        String?             @map("invoice_url") @db.Text
+  completedAt       DateTime?           @map("completed_at") @db.Timestamptz()
+  certificateUrl    String?             @map("certificate_url") @db.Text
+  npsScore          Int?                @map("nps_score")
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+
+  cohort            CourseCohort        @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+
+  @@unique([cohortId, userId])
+  @@index([userId])
+  @@map("course_enrollments")
+}
+
+// ──────────────────────────────────────────────────────────────
+// EVENTS + AWARDS — zirveler, ödül törenleri, webinar'lar
+// ──────────────────────────────────────────────────────────────
+
+enum EventType {
+  summit              // yıllık büyük zirve
+  workshop
+  webinar
+  meetup
+  awards              // ödül töreni
+}
+
+enum EventStatus {
+  draft
+  announced
+  registration_open
+  sold_out
+  in_progress
+  completed
+  canceled
+}
+
+model Event {
+  id              String           @id @default(uuid()) @db.Uuid
+  slug            String           @unique @db.VarChar(200)
+  type            EventType
+  title           String           @db.VarChar(200)
+  description     String?          @db.Text
+  coverUrl        String?          @map("cover_url") @db.Text
+  startsAt        DateTime         @map("starts_at") @db.Timestamptz()
+  endsAt          DateTime?        @map("ends_at") @db.Timestamptz()
+  venue           String?          @db.VarChar(200)
+  city            String?          @db.VarChar(80)
+  capacity        Int?
+  registeredCount Int              @default(0) @map("registered_count")
+  ticketTiers     Json?            @map("ticket_tiers")
+  sponsorTiers    Json?            @map("sponsor_tiers")
+  status          EventStatus      @default(draft)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz()
+
+  awardSubmissions AwardSubmission[]
+  tickets          EventTicket[]
+
+  @@index([status, startsAt])
+  @@map("events")
+}
+
+enum SubmissionStatus {
+  submitted
+  reviewing
+  shortlist
+  finalist
+  winner
+  rejected
+}
+
+model AwardSubmission {
+  id              String           @id @default(uuid()) @db.Uuid
+  eventId         String           @map("event_id") @db.Uuid
+  category        String           @db.VarChar(100)
+  submitterId     String?          @map("submitter_id") @db.Uuid
+  agencyId        String?          @map("agency_id") @db.Uuid
+  brandName       String?          @map("brand_name") @db.VarChar(150)
+  campaignTitle   String           @map("campaign_title") @db.VarChar(200)
+  description     String           @db.Text
+  caseStudyUrl    String?          @map("case_study_url") @db.Text
+  videoUrl        String?          @map("video_url") @db.Text
+  teamMembers     Json?            @map("team_members")
+  feePaidTry      Decimal          @default(0) @map("fee_paid_try") @db.Decimal(10, 2)
+  status          SubmissionStatus @default(submitted)
+  juryScores      Json?            @map("jury_scores")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  event           Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, status])
+  @@map("award_submissions")
+}
+
+model EventTicket {
+  id              String           @id @default(uuid()) @db.Uuid
+  eventId         String           @map("event_id") @db.Uuid
+  userId          String?          @map("user_id") @db.Uuid
+  attendeeName    String           @map("attendee_name") @db.VarChar(150)
+  attendeeEmail   String           @map("attendee_email") @db.VarChar(255)
+  tierName        String           @map("tier_name") @db.VarChar(80)
+  pricePaidTry    Decimal          @map("price_paid_try") @db.Decimal(10, 2)
+  qrCode          String           @unique @map("qr_code") @db.VarChar(120)
+  checkedInAt     DateTime?        @map("checked_in_at") @db.Timestamptz()
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  event           Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("event_tickets")
+}
+
+// ──────────────────────────────────────────────────────────────
+// REPORTS — premium rapor mağazası
+// ──────────────────────────────────────────────────────────────
+
+model Report {
+  id              String           @id @default(uuid()) @db.Uuid
+  slug            String           @unique @db.VarChar(200)
+  title           String           @db.VarChar(200)
+  description     String?          @db.Text
+  coverUrl        String?          @map("cover_url") @db.Text
+  previewUrl      String?          @map("preview_url") @db.Text
+  fileKey         String?          @map("file_key") @db.VarChar(500)
+  pageCount       Int?             @map("page_count")
+  priceTry        Decimal          @default(0) @map("price_try") @db.Decimal(10, 2)
+  isFree          Boolean          @default(false) @map("is_free")
+  /// Lite/Pro üyelik içeriyorsa true
+  includedInTier  String?          @map("included_in_tier") @db.VarChar(50)
+  downloadCount   Int              @default(0) @map("download_count")
+  publishedAt     DateTime?        @map("published_at") @db.Timestamptz()
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@map("reports")
+}
+
+// ──────────────────────────────────────────────────────────────
+// RESEARCH PANEL — Türkiye Pazarlama Endeksi
+// ──────────────────────────────────────────────────────────────
+
+model ResearchPanelMember {
+  id              String           @id @default(uuid()) @db.Uuid
+  userId          String           @map("user_id") @db.Uuid
+  roleType        String           @map("role_type") @db.VarChar(50)
+  // CMO, marketing_manager, agency_owner, ...
+  companySize     String?          @map("company_size") @db.VarChar(50)
+  industry        String?          @db.VarChar(80)
+  isActive        Boolean          @default(true) @map("is_active")
+  honorariumMethod String?         @map("honorarium_method") @db.VarChar(50)
+  joinedAt        DateTime         @default(now()) @map("joined_at") @db.Timestamptz()
+
+  @@unique([userId])
+  @@index([roleType, isActive])
+  @@map("research_panel_members")
+}
+
+model ResearchSurvey {
+  id              String           @id @default(uuid()) @db.Uuid
+  slug            String           @unique @db.VarChar(200)
+  title           String           @db.VarChar(200)
+  questions       Json
+  targetSegments  String[]         @default([]) @map("target_segments")
+  fieldedAt       DateTime?        @map("fielded_at") @db.Timestamptz()
+  closedAt        DateTime?        @map("closed_at") @db.Timestamptz()
+  responseCount   Int              @default(0) @map("response_count")
+  reportUrl       String?          @map("report_url") @db.Text
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  responses       ResearchResponse[]
+
+  @@map("research_surveys")
+}
+
+model ResearchResponse {
+  id              String           @id @default(uuid()) @db.Uuid
+  surveyId        String           @map("survey_id") @db.Uuid
+  userId          String?          @map("user_id") @db.Uuid
+  answers         Json
+  submittedAt     DateTime         @default(now()) @map("submitted_at") @db.Timestamptz()
+
+  survey          ResearchSurvey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  @@unique([surveyId, userId])
+  @@map("research_responses")
+}
+
+// ──────────────────────────────────────────────────────────────
+// SOCIAL POSTS — LinkedIn/IG/X/Threads/WhatsApp Channel
+// ──────────────────────────────────────────────────────────────
+
+enum SocialChannel {
+  linkedin
+  instagram
+  twitter
+  threads
+  tiktok
+  whatsapp_channel
+}
+
+enum SocialPostFormat {
+  text_post
+  carousel
+  reels
+  story
+  thread
+  short
+}
+
+enum SocialPostStatus {
+  draft
+  scheduled
+  published
+  failed
+}
+
+model SocialPost {
+  id              String              @id @default(uuid()) @db.Uuid
+  articleId       String?             @map("article_id") @db.Uuid
+  channel         SocialChannel
+  format          SocialPostFormat
+  content         Json
+  mediaUrls       String[]            @default([]) @map("media_urls")
+  scheduledAt     DateTime?           @map("scheduled_at") @db.Timestamptz()
+  publishedAt     DateTime?           @map("published_at") @db.Timestamptz()
+  externalId      String?             @map("external_id") @db.VarChar(200)
+  status          SocialPostStatus    @default(draft)
+  errorMessage    String?             @map("error_message") @db.Text
+  performance     Json?
+  createdById     String?             @map("created_by") @db.Uuid
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([articleId])
+  @@index([channel, status, scheduledAt])
+  @@map("social_posts")
+}
+
+// ──────────────────────────────────────────────────────────────
+// ADS — banner + sponsorlu
+// ──────────────────────────────────────────────────────────────
+
+enum AdvertiserStatus {
+  active
+  inactive
+}
+
+model Advertiser {
+  id              String              @id @default(uuid()) @db.Uuid
+  name            String              @db.VarChar(200)
+  contactName     String?             @map("contact_name") @db.VarChar(150)
+  contactEmail    String?             @map("contact_email") @db.VarChar(255)
+  contactPhone    String?             @map("contact_phone") @db.VarChar(50)
+  billingInfo     Json?               @map("billing_info")
+  status          AdvertiserStatus    @default(active)
+  /// Self-serve Brand Account ile bağlantı (varsa)
+  brandAccountId  String?             @unique @map("brand_account_id") @db.Uuid
+  brandAccount    BrandAccount?       @relation(fields: [brandAccountId], references: [id], onDelete: SetNull)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+
+  campaigns       AdCampaign[]
+
+  @@map("advertisers")
+}
+
+enum AdCampaignType {
+  banner
+  sponsored_content
+  newsletter
+  native
+  agency_premium
+  job_premium
+}
+
+enum AdCampaignStatus {
+  draft
+  pending_approval     // self-serve onay bekliyor
+  scheduled
+  active
+  paused
+  completed
+  canceled
+  rejected
+}
+
+enum AdCampaignSource {
+  manual               // sales tarafından oluşturuldu
+  self_serve           // firma kendi paneli üzerinden
+}
+
+model AdCampaign {
+  id              String              @id @default(uuid()) @db.Uuid
+  advertiserId    String              @map("advertiser_id") @db.Uuid
+  name            String              @db.VarChar(200)
+  type            AdCampaignType
+  source          AdCampaignSource    @default(manual)
+  goal            String?             @db.VarChar(50)
+  // awareness, traffic, lead_gen, brand_story
+
+  startAt         DateTime            @map("start_at") @db.Timestamptz()
+  endAt           DateTime            @map("end_at") @db.Timestamptz()
+  budget          Decimal             @db.Decimal(12, 2)
+  spentTry        Decimal             @default(0) @map("spent_try") @db.Decimal(12, 2)
+  currency        String              @default("TRY") @db.VarChar(10)
+  targeting       Json?
+  status          AdCampaignStatus    @default(draft)
+
+  // Self-serve moderation
+  submittedAt     DateTime?           @map("submitted_at") @db.Timestamptz()
+  approvedById    String?             @map("approved_by") @db.Uuid
+  approvedAt      DateTime?           @map("approved_at") @db.Timestamptz()
+  rejectedReason  String?             @map("rejected_reason") @db.Text
+
+  // Performance cache
+  totalImpressions BigInt             @default(0) @map("total_impressions")
+  totalClicks     BigInt              @default(0) @map("total_clicks")
+
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+
+  advertiser      Advertiser          @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  slots           AdSlot[]
+  brandCreatives  BrandCreative[]
+
+  @@index([status, startAt])
+  @@index([advertiserId, status])
+  @@index([source])
+  @@map("ad_campaigns")
+}
+
+enum AdPlacement {
+  homepage_top
+  category_top
+  article_inline
+  sidebar_sticky
+  mobile_sticky
+  newsletter_top
+}
+
+model AdSlot {
+  id              String              @id @default(uuid()) @db.Uuid
+  campaignId      String              @map("campaign_id") @db.Uuid
+  placement       AdPlacement
+  creativeUrl     String              @map("creative_url") @db.Text
+  clickUrl        String              @map("click_url") @db.Text
+  altText         String?             @map("alt_text") @db.VarChar(200)
+  weight          Int                 @default(1)
+  startAt         DateTime            @map("start_at") @db.Timestamptz()
+  endAt           DateTime            @map("end_at") @db.Timestamptz()
+  impressions     BigInt              @default(0)
+  clicks          BigInt              @default(0)
+  status          String              @default("active") @db.VarChar(30)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+
+  campaign        AdCampaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([placement, status, startAt, endAt])
+  @@map("ad_slots")
+}
+
+// ──────────────────────────────────────────────────────────────
+// NEWSLETTER — "Pazarlama 5" günlük + sponsorluk segmentleri
+// ──────────────────────────────────────────────────────────────
+
+enum NewsletterSubscriberStatus {
+  pending
+  confirmed
+  unsubscribed
+  bounced
+  complained
+}
+
+model NewsletterSubscriber {
+  id              String                      @id @default(uuid()) @db.Uuid
+  email           String                      @unique @db.VarChar(255)
+  fullName        String?                     @map("full_name") @db.VarChar(150)
+  status          NewsletterSubscriberStatus  @default(pending)
+  segments        String[]                    @default([])
+  source          String?                     @db.VarChar(80)
+  confirmToken    String?                     @map("confirm_token") @db.VarChar(120)
+  confirmedAt     DateTime?                   @map("confirmed_at") @db.Timestamptz()
+  unsubscribedAt  DateTime?                   @map("unsubscribed_at") @db.Timestamptz()
+  lastOpenAt      DateTime?                   @map("last_open_at") @db.Timestamptz()
+  lastClickAt     DateTime?                   @map("last_click_at") @db.Timestamptz()
+  openCount       Int                         @default(0) @map("open_count")
+  clickCount      Int                         @default(0) @map("click_count")
+  userId          String?                     @map("user_id") @db.Uuid
+  ipAddress       String?                     @map("ip_address") @db.VarChar(45)
+  createdAt       DateTime                    @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime                    @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([status, createdAt(sort: Desc)])
+  @@map("newsletter_subscribers")
+}
+
+enum NewsletterIssueStatus {
+  draft
+  scheduled
+  sending
+  sent
+  failed
+}
+
+model NewsletterIssue {
+  id              String                @id @default(uuid()) @db.Uuid
+  slug            String                @unique @db.VarChar(200)
+  subject         String                @db.VarChar(300)
+  preheader       String?               @db.VarChar(200)
+  contentHtml     String                @map("content_html") @db.Text
+  contentJson     Json?                 @map("content_json")
+  segments        String[]              @default([])
+  scheduledAt     DateTime?             @map("scheduled_at") @db.Timestamptz()
+  sentAt          DateTime?             @map("sent_at") @db.Timestamptz()
+  sponsorId       String?               @map("sponsor_id") @db.Uuid
+  sponsorPosition String?               @map("sponsor_position") @db.VarChar(50)
+  sponsorRevenue  Decimal?              @map("sponsor_revenue") @db.Decimal(10, 2)
+  totalRecipients Int                   @default(0) @map("total_recipients")
+  totalSent       Int                   @default(0) @map("total_sent")
+  totalOpens      Int                   @default(0) @map("total_opens")
+  totalClicks     Int                   @default(0) @map("total_clicks")
+  totalUnsubs     Int                   @default(0) @map("total_unsubs")
+  status          NewsletterIssueStatus @default(draft)
+  createdById     String?               @map("created_by") @db.Uuid
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([status, scheduledAt])
+  @@map("newsletter_issues")
+}
+
+// ──────────────────────────────────────────────────────────────
+// COMMENTS + BOOKMARKS — kullanıcı etkileşim katmanı
+// ──────────────────────────────────────────────────────────────
+
+enum CommentStatus {
+  pending
+  approved
+  rejected
+  spam
+}
+
+model Comment {
+  id              String         @id @default(uuid()) @db.Uuid
+  articleId       String         @map("article_id") @db.Uuid
+  userId          String         @map("user_id") @db.Uuid
+  parentId        String?        @map("parent_id") @db.Uuid
+  content         String         @db.Text
+  status          CommentStatus  @default(pending)
+  upvotes         Int            @default(0)
+  reportedCount   Int            @default(0) @map("reported_count")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz()
+
+  parent          Comment?       @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies         Comment[]      @relation("CommentReplies")
+
+  @@index([articleId, status, createdAt(sort: Desc)])
+  @@index([userId])
+  @@map("comments")
+}
+
+model Bookmark {
+  id              String         @id @default(uuid()) @db.Uuid
+  userId          String         @map("user_id") @db.Uuid
+  articleId       String?        @map("article_id") @db.Uuid
+  agencyId        String?        @map("agency_id") @db.Uuid
+  jobId           String?        @map("job_id") @db.Uuid
+  reportId        String?        @map("report_id") @db.Uuid
+  notes           String?        @db.Text
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@unique([userId, articleId])
+  @@unique([userId, agencyId])
+  @@unique([userId, jobId])
+  @@unique([userId, reportId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("bookmarks")
+}
+
+// ──────────────────────────────────────────────────────────────
+// COMMUNITY — CMO Club Slack
+// ──────────────────────────────────────────────────────────────
+
+model CommunityMember {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  community       String   @db.VarChar(50)
+  slackUserId     String?  @map("slack_user_id") @db.VarChar(80)
+  slackChannelId  String?  @map("slack_channel_id") @db.VarChar(80)
+  badges          String[] @default([])
+  joinedAt        DateTime @default(now()) @map("joined_at") @db.Timestamptz()
+  isActive        Boolean  @default(true) @map("is_active")
+
+  @@unique([userId, community])
+  @@index([community, isActive])
+  @@map("community_members")
+}
+
+// ──────────────────────────────────────────────────────────────
+// AI Generations — strateji doc 7.x'ten
+// ──────────────────────────────────────────────────────────────
+
+model AiGeneration {
+  id              String   @id @default(uuid()) @db.Uuid
+  articleId       String?  @map("article_id") @db.Uuid
+  generationType  String   @map("generation_type") @db.VarChar(50)
+  // title, spot, summary, why_matters, brand_takeaways, agency_takeaways,
+  // linkedin_post, instagram_carousel, reels_script, seo_meta, cover_image
+  prompt          String   @db.Text
+  output          String   @db.Text
+  model           String   @db.VarChar(80)
+  provider        String   @default("openai") @db.VarChar(30)
+  // openai | anthropic | gemini
+  promptTokens    Int      @default(0) @map("prompt_tokens")
+  outputTokens    Int      @default(0) @map("output_tokens")
+  costUsd         Decimal  @default(0) @map("cost_usd") @db.Decimal(10, 4)
+  durationMs      Int      @default(0) @map("duration_ms")
+  status          String   @default("success") @db.VarChar(30)
+  // success | error | cached
+  errorMessage    String?  @map("error_message") @db.Text
+  createdById     String?  @map("created_by") @db.Uuid
+
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([articleId])
+  @@index([createdAt(sort: Desc)])
+  @@index([provider, createdAt(sort: Desc)])
+  @@map("ai_generations")
+}
+
+// ──────────────────────────────────────────────────────────────
+// BRAND STUDIO — self-serve reklam platformu
+// ──────────────────────────────────────────────────────────────
+
+enum BrandAccountStatus {
+  pending_kyc          // KYC bilgisi bekleniyor
+  active
+  suspended
+  closed
+}
+
+enum BrandAccountRole {
+  owner
+  manager
+  viewer
+}
+
+model BrandAccount {
+  id               String                @id @default(uuid()) @db.Uuid
+  slug             String                @unique @db.VarChar(150)
+  companyName      String                @map("company_name") @db.VarChar(200)
+  taxNumber        String?               @map("tax_number") @db.VarChar(20)
+  /// Vergi dairesi
+  taxOffice        String?               @map("tax_office") @db.VarChar(100)
+  contactName      String                @map("contact_name") @db.VarChar(150)
+  contactEmail     String                @unique @map("contact_email") @db.VarChar(255)
+  contactPhone     String?               @map("contact_phone") @db.VarChar(50)
+  website          String?               @db.Text
+  logoUrl          String?               @map("logo_url") @db.Text
+  industry         String?               @db.VarChar(80)
+  companySize      String?               @map("company_size") @db.VarChar(50)
+  status           BrandAccountStatus    @default(pending_kyc)
+
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz()
+
+  users            BrandAccountUser[]
+  wallet           BrandWallet?
+  creatives        BrandCreative[]
+  advertiser       Advertiser?
+
+  @@index([status])
+  @@map("brand_accounts")
+}
+
+model BrandAccountUser {
+  id               String              @id @default(uuid()) @db.Uuid
+  brandAccountId   String              @map("brand_account_id") @db.Uuid
+  userId           String              @map("user_id") @db.Uuid
+  role             BrandAccountRole    @default(viewer)
+  invitedAt        DateTime            @default(now()) @map("invited_at") @db.Timestamptz()
+  acceptedAt       DateTime?           @map("accepted_at") @db.Timestamptz()
+
+  brandAccount     BrandAccount        @relation(fields: [brandAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([brandAccountId, userId])
+  @@index([userId])
+  @@map("brand_account_users")
+}
+
+model BrandWallet {
+  id               String                 @id @default(uuid()) @db.Uuid
+  brandAccountId   String                 @unique @map("brand_account_id") @db.Uuid
+  balanceTry       Decimal                @default(0) @map("balance_try") @db.Decimal(12, 2)
+  totalRechargedTry Decimal               @default(0) @map("total_recharged_try") @db.Decimal(14, 2)
+  totalSpentTry    Decimal                @default(0) @map("total_spent_try") @db.Decimal(14, 2)
+
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime               @updatedAt @map("updated_at") @db.Timestamptz()
+
+  brandAccount     BrandAccount           @relation(fields: [brandAccountId], references: [id], onDelete: Cascade)
+  transactions     WalletTransaction[]
+
+  @@map("brand_wallets")
+}
+
+enum WalletTransactionType {
+  recharge         // bakiye yükleme
+  spend            // kampanya harcaması
+  refund           // iade
+  bonus            // promosyon bonusu
+  adjustment       // admin manuel düzeltme
+}
+
+model WalletTransaction {
+  id               String                  @id @default(uuid()) @db.Uuid
+  walletId         String                  @map("wallet_id") @db.Uuid
+  type             WalletTransactionType
+  amountTry        Decimal                 @map("amount_try") @db.Decimal(12, 2)
+  balanceBefore    Decimal                 @map("balance_before") @db.Decimal(12, 2)
+  balanceAfter     Decimal                 @map("balance_after") @db.Decimal(12, 2)
+  description      String                  @db.VarChar(300)
+  campaignId       String?                 @map("campaign_id") @db.Uuid
+  stripePaymentId  String?                 @map("stripe_payment_id") @db.VarChar(120)
+  metadata         Json?
+
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz()
+
+  wallet           BrandWallet             @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId, createdAt(sort: Desc)])
+  @@index([campaignId])
+  @@map("wallet_transactions")
+}
+
+enum BrandCreativeType {
+  banner               // banner reklam görseli + click URL
+  sponsored_article    // Marka Hamlesi tarzı sponsorlu makale
+  newsletter_blurb     // newsletter'da 80 kelimelik sponsor metin
+  linkedin_post        // LinkedIn sponsor postu
+  reels_script         // Reels/Story video script
+}
+
+enum BrandCreativeStatus {
+  draft
+  ready                // firma onayladı, kullanıma hazır
+  in_campaign          // aktif kampanyada
+  archived
+}
+
+model BrandCreative {
+  id               String                  @id @default(uuid()) @db.Uuid
+  brandAccountId   String                  @map("brand_account_id") @db.Uuid
+  type             BrandCreativeType
+  name             String                  @db.VarChar(200)
+  /// AI üretim çıktısı + manuel düzenleme — schema type'a göre değişir
+  content          Json
+  /// AI üretimden geliyorsa referans
+  aiGenerationId   String?                 @map("ai_generation_id") @db.Uuid
+  /// Banner için görsel URL, sponsor article için cover, vb.
+  assetUrl         String?                 @map("asset_url") @db.Text
+  clickUrl         String?                 @map("click_url") @db.Text
+  altText          String?                 @map("alt_text") @db.VarChar(300)
+
+  status           BrandCreativeStatus     @default(draft)
+  campaignId       String?                 @map("campaign_id") @db.Uuid
+
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime                @updatedAt @map("updated_at") @db.Timestamptz()
+
+  brandAccount     BrandAccount            @relation(fields: [brandAccountId], references: [id], onDelete: Cascade)
+  campaign         AdCampaign?             @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([brandAccountId, status])
+  @@index([type])
+  @@map("brand_creatives")
+}
+
+// ════════════════════════════════════════════════════════════════
+// PAGE CONTENT CMS — landing/marketing sayfalarının admin tarafından
+// düzenlenebilir, block-tabanlı içerikleri.
+//
+// slug    → "landing-hero", "landing-faq", "hakkimizda", "kvkk", ...
+// blocks  → JSON array of block objects:
+//             - { type: "hero", title, subtitle, eyebrow, ctaLabel, ctaHref }
+//             - { type: "feature-grid", items: [{ title, desc, icon }] }
+//             - { type: "faq", items: [{ q, a }] }
+//             - { type: "text", html }
+//             - { type: "cta-banner", title, subtitle, ctaLabel, ctaHref }
+// locale  → "tr" | "en"
+// ════════════════════════════════════════════════════════════════
+model PageContent {
+  id           String      @id @default(uuid()) @db.Uuid
+  slug         String      @db.VarChar(80)
+  locale       String      @default("tr") @db.VarChar(5)
+  title        String?     @db.VarChar(200)
+  /// JSON block array
+  blocks       Json
+  isPublished  Boolean     @default(true) @map("is_published")
+  updatedById  String?     @map("updated_by_id") @db.Uuid
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz()
+
+  updatedBy    User?       @relation("PageContentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([slug, locale])
+  @@index([isPublished])
+  @@map("page_contents")
+}

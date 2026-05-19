@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── Light ──────────────────────────────────────── */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 226 71% 21%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Brand orange — same value across modes */
+    --accent: 24 95% 53%;
+    --accent-foreground: 0 0% 100%;
+    --accent-600: 21 90% 48%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 226 71% 40%;
+
+    --surface: 210 40% 98%;
+    --surface-foreground: 222 47% 11%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* ── Dark — Linear-vari near-black, neutral tone (slate-950 yakını) ── */
+    --background: 220 13% 5%;
+    --foreground: 210 20% 96%;
+
+    --card: 220 13% 8%;
+    --card-foreground: 210 20% 96%;
+
+    --popover: 220 13% 8%;
+    --popover-foreground: 210 20% 96%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 220 13% 5%;
+
+    --secondary: 220 13% 14%;
+    --secondary-foreground: 210 20% 96%;
+
+    --muted: 220 13% 12%;
+    --muted-foreground: 215 14% 60%;
+
+    --accent: 24 95% 58%;
+    --accent-foreground: 0 0% 100%;
+    --accent-600: 21 90% 52%;
+
+    --destructive: 0 63% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 16%;
+    --input: 220 13% 16%;
+    --ring: 217 91% 60%;
+
+    --surface: 220 13% 7%;
+    --surface-foreground: 210 20% 96%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Linear-style display headings — Inter Tight + tighter letter-spacing */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display), var(--font-inter), system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  h1 {
+    letter-spacing: -0.03em;
+  }
+}
+
+@layer components {
+  .container-tight {
+    @apply mx-auto max-w-4xl px-4 sm:px-6;
+  }
+}
+
+/* Smooth theme transitions */
+html.theme-ready,
+html.theme-ready * {
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    fill 150ms ease,
+    stroke 150ms ease;
+}

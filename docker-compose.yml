@@ -1,0 +1,100 @@
+# MarkaRadar — Yerel geliştirme ortamı
+# Sadece dev. Production'da Docker YOK (PM2 + sistem servisi).
+#
+# Portlar diğer projelerle çakışmasın diye yüksek seçildi:
+#   postgres : 5434
+#   redis    : 6390
+#   minio    : 9110 (api), 9111 (console)
+#   mailhog  : 1030 (smtp), 8030 (ui)
+#
+# Komutlar:
+#   docker compose up -d        # başlat
+#   docker compose ps           # durum
+#   docker compose logs -f      # tüm loglar
+#   docker compose stop         # durdur (data korunur)
+#   docker compose down -v      # tamamen sil (data dahil)
+
+name: markaradar
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: markaradar_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: markaradar
+      POSTGRES_PASSWORD: dev_password_change_me
+      POSTGRES_DB: markaradar_dev
+      TZ: Europe/Istanbul
+      PGTZ: Europe/Istanbul
+    ports:
+      - "5434:5432"
+    volumes:
+      - markaradar_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U markaradar -d markaradar_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: markaradar_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6390:6379"
+    volumes:
+      - markaradar_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: markaradar_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: markaradar
+      MINIO_ROOT_PASSWORD: dev_minio_password
+    ports:
+      - "9110:9000"
+      - "9111:9001"
+    volumes:
+      - markaradar_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO'da bucket'ı otomatik oluştursun (one-shot)
+  minio-init:
+    image: minio/mc:latest
+    container_name: markaradar_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 markaradar dev_minio_password;
+      mc mb --ignore-existing local/markaradar-media;
+      mc anonymous set download local/markaradar-media;
+      echo 'MinIO bucket ready';
+      "
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: markaradar_mailhog
+    restart: unless-stopped
+    ports:
+      - "1030:1025"
+      - "8030:8025"
+
+volumes:
+  markaradar_pg_data:
+  markaradar_redis_data:
+  markaradar_minio_data:
