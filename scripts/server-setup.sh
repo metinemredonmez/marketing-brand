@@ -109,7 +109,7 @@ fi
 if [ ! -f api/.env ]; then
   cat > api/.env <<EOF
 NODE_ENV=production
-PORT=4000
+PORT=4010
 APP_URL=https://api.$DOMAIN
 DATABASE_URL=postgresql://markaradar:${PG_PASS}@localhost:5432/markaradar_prod
 REDIS_HOST=localhost
@@ -217,11 +217,11 @@ server {
     client_max_body_size 25M;
 
     location /_next/static/ {
-        proxy_pass http://127.0.0.1:3003;
+        proxy_pass http://127.0.0.1:3013;
         add_header Cache-Control "public, max-age=31536000, immutable";
     }
     location / {
-        proxy_pass http://127.0.0.1:3003;
+        proxy_pass http://127.0.0.1:3013;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -236,7 +236,7 @@ server {
     location /.well-known/acme-challenge/ { root /var/www/certbot; }
     client_max_body_size 25M;
     location / {
-        proxy_pass http://127.0.0.1:4000;
+        proxy_pass http://127.0.0.1:4010;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -249,11 +249,11 @@ server {
     location /.well-known/acme-challenge/ { root /var/www/certbot; }
     client_max_body_size 25M;
     location /_next/static/ {
-        proxy_pass http://127.0.0.1:3004;
+        proxy_pass http://127.0.0.1:3014;
         add_header Cache-Control "public, max-age=31536000, immutable";
     }
     location / {
-        proxy_pass http://127.0.0.1:3004;
+        proxy_pass http://127.0.0.1:3014;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -286,9 +286,9 @@ bold "ÖZET"
 echo ""
 SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "<sunucu-ip>")
 ok "Kod: $APP_DIR"
-ok "API: http://127.0.0.1:4000 (PM2: markaradar-api)"
-ok "Web: http://127.0.0.1:3003 (PM2: markaradar-web)"
-ok "Admin: http://127.0.0.1:3004 (PM2: markaradar-admin)"
+ok "API: http://127.0.0.1:4010 (PM2: markaradar-api)"
+ok "Web: http://127.0.0.1:3013 (PM2: markaradar-web)"
+ok "Admin: http://127.0.0.1:3014 (PM2: markaradar-admin)"
 echo ""
 ok "Sunucu IP: $SERVER_IP"
 echo ""

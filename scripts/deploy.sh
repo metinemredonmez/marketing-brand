@@ -47,9 +47,9 @@ pm2 save
 echo ""
 echo "═══ Sağlık kontrolü"
 sleep 3
-curl -sf http://127.0.0.1:4000/health >/dev/null && echo "✓ API" || echo "✗ API"
-curl -sf http://127.0.0.1:3003 >/dev/null && echo "✓ Web" || echo "✗ Web"
-curl -sf http://127.0.0.1:3004 >/dev/null && echo "✓ Admin (veya 307)" || echo "✗ Admin"
+curl -sf http://127.0.0.1:4010/health >/dev/null && echo "✓ API" || echo "✗ API"
+curl -sf http://127.0.0.1:3013 >/dev/null && echo "✓ Web" || echo "✗ Web"
+curl -sf http://127.0.0.1:3014 >/dev/null && echo "✓ Admin (veya 307)" || echo "✗ Admin"
 
 echo ""
 echo "✓ Deploy tamam"

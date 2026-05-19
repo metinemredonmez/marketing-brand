@@ -12,7 +12,7 @@ import { toast } from "@/components/ui/toaster";
 import { useTranslations } from "@/lib/i18n/client";
 
 export default function NewEventPage() {
-  const t = useTranslations();
+  const { t } = useTranslations();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = useState({

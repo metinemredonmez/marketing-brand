@@ -6,10 +6,10 @@
 //   pm2 save
 //   pm2 startup
 //
-// Servisler:
-//   markaradar-api    (NestJS)    → port 4000
-//   markaradar-web    (Next.js)   → port 3003
-//   markaradar-admin  (Next.js)   → port 3004
+// Servisler (port'lar pureolentia ile çakışmaması için yüksek seçildi):
+//   markaradar-api    (NestJS)    → port 4010
+//   markaradar-web    (Next.js)   → port 3013
+//   markaradar-admin  (Next.js)   → port 3014
 //   markaradar-worker (BullMQ)    → BG job processor (HTTP yok)
 //
 // Loglar: /var/log/pm2/markaradar-*.log (pm2-logrotate ile rotate)
@@ -28,7 +28,7 @@ module.exports = {
       max_memory_restart: "512M",
       env: {
         NODE_ENV: "production",
-        PORT: 4000,
+        PORT: 4010,
       },
       error_file: "/var/log/pm2/markaradar-api.err.log",
       out_file: "/var/log/pm2/markaradar-api.out.log",
@@ -67,7 +67,7 @@ module.exports = {
       max_memory_restart: "512M",
       env: {
         NODE_ENV: "production",
-        PORT: 3003,
+        PORT: 3013,
         HOSTNAME: "127.0.0.1",
       },
       error_file: "/var/log/pm2/markaradar-web.err.log",
@@ -87,7 +87,7 @@ module.exports = {
       max_memory_restart: "512M",
       env: {
         NODE_ENV: "production",
-        PORT: 3004,
+        PORT: 3014,
         HOSTNAME: "127.0.0.1",
       },
       error_file: "/var/log/pm2/markaradar-admin.err.log",

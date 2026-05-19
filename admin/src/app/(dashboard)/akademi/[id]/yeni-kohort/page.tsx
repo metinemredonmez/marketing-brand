@@ -15,7 +15,7 @@ export default function NewCohortPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const t = useTranslations();
+  const { t } = useTranslations();
   const { id } = use(params);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
