@@ -4,6 +4,8 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { CookieBanner } from "@/components/marketing/cookie-banner";
 import { ThemeScript } from "@/components/theme/theme-script";
+import { Analytics } from "@/components/analytics/analytics";
+import { OrganizationJsonLd, WebsiteJsonLd } from "@/components/seo/json-ld";
 import { I18nProvider } from "@/lib/i18n/client";
 import { getLocale } from "@/lib/i18n/server";
 
@@ -57,6 +59,25 @@ export const metadata: Metadata = {
       "/api/og?title=Pazarlamanın+hızını+AI+ile+yakala&eyebrow=MarkaRadar",
     ],
   },
+  alternates: {
+    canonical: "/",
+    languages: {
+      "tr-TR": "/",
+      "en-US": "/?lang=en",
+      "x-default": "/",
+    },
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-snippet": -1,
+      "max-image-preview": "large",
+      "max-video-preview": -1,
+    },
+  },
 };
 
 export default async function RootLayout({
@@ -73,12 +94,15 @@ export default async function RootLayout({
     >
       <head>
         <ThemeScript />
+        <OrganizationJsonLd />
+        <WebsiteJsonLd />
       </head>
       <body className="font-sans">
         <I18nProvider locale={locale}>
           <ThemeProvider>
             {children}
             <CookieBanner />
+            <Analytics />
           </ThemeProvider>
         </I18nProvider>
       </body>

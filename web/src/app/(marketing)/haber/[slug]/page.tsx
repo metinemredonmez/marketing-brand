@@ -6,6 +6,7 @@ import { ArrowLeft, Sparkles, Building2, Megaphone } from "lucide-react";
 import { getArticle } from "@/lib/api/articles";
 import { ApiError, getCurrentUser } from "@/lib/api/client";
 import { ArticlePaywall } from "@/components/article/paywall";
+import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/seo/json-ld";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -57,6 +58,30 @@ export default async function ArticlePage({ params }: Props) {
 
   return (
     <article className="mx-auto max-w-3xl px-4 py-12 md:py-20">
+      <ArticleJsonLd
+        title={article.title}
+        slug={article.slug}
+        description={article.spot ?? article.aiSummary}
+        coverUrl={article.coverUrl}
+        publishedAt={article.publishedAt}
+        updatedAt={article.updatedAt}
+        author={article.author}
+        category={article.category}
+      />
+      <BreadcrumbJsonLd
+        items={[
+          { name: "Anasayfa", url: "/" },
+          ...(article.category
+            ? [
+                {
+                  name: article.category.name,
+                  url: `/kategori/${article.category.slug}`,
+                },
+              ]
+            : []),
+          { name: article.title, url: `/haber/${article.slug}` },
+        ]}
+      />
       <Link
         href="/"
         className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
