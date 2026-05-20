@@ -33,13 +33,13 @@ function CityClock({ code, tz }: CityProps) {
 
   return (
     <div className="flex flex-col items-center">
-      <div className="flex items-center gap-1 text-muted-foreground">
+      <div className="flex items-center gap-1.5 text-muted-foreground">
         <Clock
-          className="h-2.5 w-2.5"
-          strokeWidth={2.25}
+          className="h-3 w-3 text-accent"
+          strokeWidth={2}
           aria-hidden
         />
-        <span className="text-[10px] font-mono font-bold uppercase tracking-widest">
+        <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-foreground/80">
           {code}
         </span>
       </div>
