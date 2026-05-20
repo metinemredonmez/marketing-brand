@@ -4,6 +4,12 @@ import { SidebarMobile } from "@/components/dashboard/sidebar-mobile";
 import { Topbar } from "@/components/dashboard/topbar";
 import { getMe } from "@/lib/api/client";
 
+// KRİTİK: Layout cookie-based redirect yapıyor. Build sırasında cookie yok →
+// redirect('/login') prerender'a bake oluyor → her istek cache HIT → 307 sonsuza kadar.
+// force-dynamic ile her istekte fresh render — cookie'ler runtime'da gelir.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function DashboardLayout({
   children,
 }: {
