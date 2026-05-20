@@ -100,6 +100,8 @@ module.exports = {
         NEXT_PUBLIC_ADMIN_URL: "https://213.159.6.225:8443",
         NEXT_PUBLIC_WEB_URL: "https://213.159.6.225",
         NEXT_PUBLIC_ENV: "production",
+        // Self-signed cert + IP demo'da Secure flag'i strip et
+        STRIP_SECURE_COOKIES: "true",
       },
       error_file: "/var/log/pm2/markaradar-admin.err.log",
       out_file: "/var/log/pm2/markaradar-admin.out.log",

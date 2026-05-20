@@ -76,6 +76,13 @@ export async function POST(req: NextRequest) {
     if (single) setCookies = [single];
   }
 
+  // Cookie'leri opsiyonel olarak temizle —
+  // Self-signed cert + IP setup'ta browser Secure cookie'i reddediyor.
+  // STRIP_SECURE_COOKIES=true ile Secure flag'ı sök.
+  const stripSecure =
+    process.env.STRIP_SECURE_COOKIES === "true" ||
+    process.env.COOKIE_SECURE === "false";
+
   // Response oluştur — Set-Cookie'leri manuel append
   const res = NextResponse.json({
     ok: true,
@@ -83,8 +90,15 @@ export async function POST(req: NextRequest) {
     redirectTo: "/",
     // Debug — kaç cookie forward edildi (browser network tab'da görünür)
     _cookiesForwarded: setCookies.length,
+    _stripSecure: stripSecure,
   });
-  for (const cookie of setCookies) {
+  for (let cookie of setCookies) {
+    if (stripSecure) {
+      // "; Secure" veya "Secure;" veya sadece "Secure" attribute'unu sök
+      cookie = cookie
+        .replace(/;\s*Secure(?=;|$)/gi, "")
+        .replace(/^Secure;\s*/i, "");
+    }
     res.headers.append("set-cookie", cookie);
   }
   return res;
