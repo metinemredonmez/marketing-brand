@@ -1,6 +1,7 @@
-// Route handler login — server action'ın cookie set sorununa garantili çözüm.
-// API'ye fetch atar, gelen Set-Cookie header'larını response'a olduğu gibi forward eder.
-// Next.js cookie store kullanmaz → cookie commit garantisi 100%.
+// Route handler login — Next.js 15 server action cookie commit bug'ına garantili çözüm.
+// API'ye fetch atar, gelen Set-Cookie'lerden SADECE name+value'yu alır,
+// kalan tüm attribute'leri (Domain/Secure/SameSite) kendimiz kontrollü set ederiz.
+// Bu sayede API ne gönderirse göndersin browser kabul eder.
 
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -17,6 +18,12 @@ const ADMIN_ROLES = [
   "sales",
 ];
 
+// Self-signed cert + IP setup'ında Secure cookie browser tarafından reddedilir.
+// STRIP_SECURE_COOKIES=true ile Secure flag'i sökeriz, gerçek domain'e geçince false yap.
+const STRIP_SECURE =
+  process.env.STRIP_SECURE_COOKIES === "true" ||
+  process.env.COOKIE_SECURE === "false";
+
 export async function POST(req: NextRequest) {
   let body: { email?: string; password?: string };
   try {
@@ -27,7 +34,10 @@ export async function POST(req: NextRequest) {
 
   const { email, password } = body;
   if (!email || !password) {
-    return NextResponse.json({ message: "E-posta + şifre zorunlu" }, { status: 400 });
+    return NextResponse.json(
+      { message: "E-posta + şifre zorunlu" },
+      { status: 400 },
+    );
   }
 
   // API'ye login at
@@ -61,7 +71,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Set-Cookie header'larını al — getSetCookie() Node 19+, raw() node-fetch
+  // Set-Cookie header'larını al — Node 19+ getSetCookie() / node-fetch raw() fallback
   let setCookies: string[] = [];
   const headersExt = upstream.headers as Headers & {
     getSetCookie?: () => string[];
@@ -76,30 +86,49 @@ export async function POST(req: NextRequest) {
     if (single) setCookies = [single];
   }
 
-  // Cookie'leri opsiyonel olarak temizle —
-  // Self-signed cert + IP setup'ta browser Secure cookie'i reddediyor.
-  // STRIP_SECURE_COOKIES=true ile Secure flag'ı sök.
-  const stripSecure =
-    process.env.STRIP_SECURE_COOKIES === "true" ||
-    process.env.COOKIE_SECURE === "false";
-
-  // Response oluştur — Set-Cookie'leri manuel append
   const res = NextResponse.json({
     ok: true,
     user: data.user,
     redirectTo: "/",
-    // Debug — kaç cookie forward edildi (browser network tab'da görünür)
-    _cookiesForwarded: setCookies.length,
-    _stripSecure: stripSecure,
+    _debug: {
+      cookiesFromUpstream: setCookies.length,
+      cookieNames: setCookies.map((c) => c.split(";")[0].split("=")[0]),
+      stripSecure: STRIP_SECURE,
+    },
   });
-  for (let cookie of setCookies) {
-    if (stripSecure) {
-      // "; Secure" veya "Secure;" veya sadece "Secure" attribute'unu sök
-      cookie = cookie
-        .replace(/;\s*Secure(?=;|$)/gi, "")
-        .replace(/^Secure;\s*/i, "");
-    }
-    res.headers.append("set-cookie", cookie);
+
+  // Cookie'leri TEK TEK parse et, attribute'leri SIFIRDAN biz set et.
+  // Bu sayede API'nin gönderdiği Domain= veya başka bozuk attribute browser'a ulaşmaz.
+  for (const raw of setCookies) {
+    if (!raw) continue;
+    const [main] = raw.split(";");
+    const eq = main.indexOf("=");
+    if (eq < 0) continue;
+    const name = main.slice(0, eq).trim();
+    const value = main.slice(eq + 1).trim();
+    if (!name || !value) continue;
+
+    // Cookie ömrü
+    const maxAge =
+      name === "mr_access"
+        ? 15 * 60
+        : name === "mr_refresh"
+          ? 30 * 24 * 60 * 60
+          : 60 * 60;
+
+    res.cookies.set({
+      name,
+      value,
+      httpOnly: true,
+      // Self-signed IP setup'ta Secure false. Real domain'e geçince true olur.
+      secure: !STRIP_SECURE,
+      sameSite: "lax",
+      path: "/",
+      maxAge,
+      // Domain attribute kasıtlı yok — host-only cookie olarak set ediyoruz.
+      // Bu sayede IP, sslip.io veya gerçek domain — fark etmez, kabul edilir.
+    });
   }
+
   return res;
 }
